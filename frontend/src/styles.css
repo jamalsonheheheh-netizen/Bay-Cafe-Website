@@ -939,3 +939,14 @@
   font-size:8px;
   font-weight:600;
 }
+
+
+/* V25 — hard-force leadership activity tab */
+.admin-access-indicator{
+  display:block;
+  margin-top:4px;
+  color:#75dcea;
+  font-size:6px;
+  font-weight:800;
+  letter-spacing:.08em;
+}

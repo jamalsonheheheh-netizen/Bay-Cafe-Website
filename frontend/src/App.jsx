@@ -534,17 +534,23 @@ function Dashboard({token,user,onLogout}){
     Number(user.level||0)>=4||
     ["leadership","ownership"].includes(String(user.tier||"").toLowerCase());
 
-  const nav=useMemo(()=>[
+  const hasLeadershipAccess=
+    Number(user.level||0)>=4||
+    ["leadership","ownership"].includes(
+      String(user.tier||"").toLowerCase()
+    );
+
+  const nav=[
     {id:"overview",label:"Overview",icon:Waves,show:true},
     {id:"announcements",label:"Announcements",icon:Megaphone,show:true},
     {id:"discord",label:"Community Activity",icon:MessageCircleMore,show:caps.discord},
+    {id:"activityAdmin",label:"Activity Management",icon:Gauge,show:hasLeadershipAccess},
     {id:"careers",label:"Careers",icon:BriefcaseBusiness,show:true},
-    {id:"applications",label:"Applications",icon:FilePenLine,show:canManageApplications},
-    {id:"activityAdmin",label:"Activity Management",icon:Gauge,show:canManageApplications},
+    {id:"applications",label:"Applications",icon:FilePenLine,show:hasLeadershipAccess},
     {id:"information",label:"Information",icon:BookOpen,show:true},
     {id:"profiles",label:"Profiles",icon:UserRoundSearch,show:caps.profiles},
     {id:"tickets",label:"Support",icon:LifeBuoy,show:caps.tickets}
-  ].filter(item=>item.show),[caps,canManageApplications]);
+  ].filter(item=>item.show);
 
   async function loadStats(){
     setStats(await api("/api/stats",{},token));
@@ -688,7 +694,11 @@ function Dashboard({token,user,onLogout}){
 
       <div className="user-mini">
         <img src={user.avatar} alt=""/>
-        <div><strong>{user.displayName}</strong><span>{user.roleName}</span></div>
+        <div>
+          <strong>{user.displayName}</strong>
+          <span>{user.roleName}</span>
+          {hasLeadershipAccess&&<small className="admin-access-indicator">ACTIVITY ADMIN ENABLED</small>}
+        </div>
       </div>
 
       <nav>
@@ -760,7 +770,7 @@ function Dashboard({token,user,onLogout}){
           <CareersPage token={token} items={careers} setToast={setToast}/>
         }
 
-        {page==="applications"&&canManageApplications&&
+        {page==="applications"&&hasLeadershipAccess&&
           <ApplicationsPage
             token={token}
             user={user}
@@ -777,7 +787,7 @@ function Dashboard({token,user,onLogout}){
           />
         }
 
-        {page==="activityAdmin"&&canManageApplications&&<ActivityAdminPage token={token} setToast={setToast}/>} 
+        {page==="activityAdmin"&&hasLeadershipAccess&&<ActivityAdminPage token={token} setToast={setToast}/>} 
         {page==="information"&&<InformationHub user={user}/>} 
         {page==="profiles"&&<Profiles token={token}/>}
         {page==="tickets"&&
