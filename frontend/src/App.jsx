@@ -1130,282 +1130,167 @@ function ApplicationsPage({token,user,items,canManage,submissions,reload,setToas
 
 function InformationHub({user}){const mg=user.capabilities?.managementInfo,gov=user.capabilities?.governanceInfo;return <div className="page-stack"><SectionHead kicker="ROLE-AWARE RESOURCE CENTER" title="Information Hub." text="Bay Café guidance and server resources automatically unlock based on your rank."/><section className="info-hero"><div><Badge>SIP. RELAX. ENJOY THE BAY.</Badge><h2>Your staff guide,<em>all in one shoreline.</em></h2><p>Read your team expectations, find internal servers, and review leadership standards without digging through old Discord messages.</p></div><a className="primary-btn inline" href="https://discord.gg/ztPy6UKxY" target="_blank" rel="noreferrer">Public Discord<ExternalLink size={14}/></a></section>{gov&&<section className="info-section"><SectionHead kicker="GOVERNANCE TEAM" title="Corporate information." text="Enhanced permissions come with enhanced responsibility."/><div className="welcome-note"><BriefcaseBusiness size={20}/><div><strong>Hey Governance Team!</strong><p>Congratulations on making it here. You still need to follow the team standards while using the enhanced permissions that come with your role. Before beginning your trial, review the information below and contact Leadership if anything is unclear.</p></div></div><div className="info-grid two"><InfoBlock title="Core Requirements"><ul><li><strong>13+ Years Old</strong> — meet the minimum age requirement set by Roblox and Discord.</li><li><strong>Professional Conduct</strong> — act respectfully, maturely, and professionally.</li><li><strong>Zero-Tolerance Policy</strong> — exploiting, hacking, raiding, leaking confidential information, or toxic behavior may result in removal.</li><li><strong>Account Security</strong> — 2FA must remain enabled on Roblox and Discord.</li></ul></InfoBlock><InfoBlock title="Leadership & Integrity"><ul><li>Lead by example and demonstrate the standard expected from staff.</li><li>Enforce rules fairly without favoritism or bias.</li><li>Take responsibility for your decisions and actions.</li><li>Ignoring violations, abusing permissions, exploiting, or bending rules for personal benefit may result in disciplinary action.</li></ul></InfoBlock><InfoBlock title="Staff Supervision & Conflict Management"><ul><li>Support staff growth with guidance and answers.</li><li>Handle corrections calmly, respectfully, and privately when possible.</li><li>Remain neutral during disputes and gather information before deciding.</li><li>Avoid public criticism, arguing, favoritism, or escalating conflicts.</li></ul></InfoBlock><InfoBlock title="Activity & Performance"><ul><li>Remain consistently active within Bay Café.</li><li>Attend required trainings, meetings, shifts, and events when requested.</li><li>Complete assigned responsibilities accurately and efficiently.</li><li>Maintain teamwork and strong customer service.</li></ul></InfoBlock><InfoBlock title="Communication Expectations"><ul><li>Use clear, respectful, professional language.</li><li>Maintain maturity with customers, staff, and Leadership.</li><li>Respond to Leadership requests within a reasonable timeframe.</li><li>Avoid arguing, spamming, trolling, and unnecessary drama.</li></ul></InfoBlock><article className="server-links-card"><span className="eyebrow">CORPORATE SERVERS</span><a href="https://discord.gg/SrMHvhmhMR" target="_blank" rel="noreferrer"><div className="link-icon"><Link2 size={17}/></div><div><strong>Corporate / Mentorship Hub</strong><span>Guidance, logging, leadership support, and corporate development.</span></div><ExternalLink size={15}/></a><a href="https://discord.gg/yvySDe3fVv" target="_blank" rel="noreferrer"><div className="link-icon"><Link2 size={17}/></div><div><strong>Public Relations Corporates</strong><span>PR Corporate coordination and resources.</span></div><ExternalLink size={15}/></a></article></div></section>}{mg&&<section className="info-section"><SectionHead kicker="MANAGEMENT TEAM" title="Management information." text="Leadership begins with consistency, professionalism, and strong judgment."/><div className="welcome-note management"><Sparkles size={20}/><div><strong>Welcome to Management!</strong><p>Your hard work, dedication, and professionalism earned this position. Management members are expected to set an example through maturity, professionalism, and strong leadership at all times.</p></div></div><div className="info-grid two"><InfoBlock title="Activity Requirements"><p>Junior Directors, Senior Directors, and Head Directors must choose one weekly activity option:</p><ul><li>1 hour of in-game activity + 10 minutes of server activity (coming soon)</li><li>OR 2 hours of in-game activity + 5 minutes of server activity</li></ul><p>Bay Café is still under development, so some systems may not track activity automatically yet. Requirement changes will be announced as systems are updated.</p></InfoBlock><InfoBlock title="Support & Questions"><p>Use the support system for exploiter reports, general support inquiries, Management questions, and resignation requests.</p><p>Resignations should be handled privately and should not be publicly announced.</p></InfoBlock><InfoBlock title="Permissions & Responsibilities"><p>Management members have access to special in-game administrative commands used to assist staff and keep the environment professional.</p><p>Admin permissions are a privilege. Abuse, misuse, favoritism, or inappropriate use may result in disciplinary action, demotion, or removal.</p></InfoBlock><InfoBlock title="Final Notes"><p>Management members are role models for the community. Remain active, professional, respectful, and committed to helping Bay Café grow.</p></InfoBlock><article className="server-links-card single"><span className="eyebrow">MANAGEMENT SERVER</span><a href="https://discord.gg/SrMHvhmhMR" target="_blank" rel="noreferrer"><div className="link-icon"><Link2 size={17}/></div><div><strong>Bay Café Management Hub</strong><span>Management communication, guidance, and internal resources.</span></div><ExternalLink size={15}/></a></article></div></section>}{!mg&&<section className="locked-info"><ShieldCheck size={22}/><div><strong>Staff information is ready.</strong><p>Management and Governance resources automatically appear here if your Bay Café rank reaches those teams.</p></div></section>}</div>;}
 
-function Profiles({
-  token
-}) {
-  const [query, setQuery] =
-    useState("");
+function Profiles({token}){
+  const[query,setQuery]=useState("");
+  const[profile,setProfile]=useState(null);
+  const[message,setMessage]=useState("");
+  const[suggestions,setSuggestions]=useState([]);
+  const[suggesting,setSuggesting]=useState(false);
 
-  const [profile, setProfile] =
-    useState(null);
+  useEffect(()=>{
+    const value=query.trim();
 
-  const [message, setMessage] =
-    useState("");
-
-  const [suggestions, setSuggestions] =
-    useState([]);
-
-  const [suggesting, setSuggesting] =
-    useState(false);
-
-  useEffect(
-    () => {
-      const value =
-        query.trim();
-
-      if (!value) {
-        setSuggestions([]);
-        setSuggesting(false);
-        return;
-      }
-
-      let cancelled =
-        false;
-
-      const timeout =
-        setTimeout(
-          async () => {
-            setSuggesting(true);
-
-            try {
-              const result =
-                await api(
-                  `/api/profiles/search?q=${encodeURIComponent(value)}`,
-                  {},
-                  token
-                );
-
-              if (!cancelled) {
-                setSuggestions(
-                  result.results ||
-                  []
-                );
-              }
-            } catch {
-              if (!cancelled) {
-                setSuggestions([]);
-              }
-            } finally {
-              if (!cancelled) {
-                setSuggesting(false);
-              }
-            }
-          },
-          220
-        );
-
-      return () => {
-        cancelled =
-          true;
-
-        clearTimeout(
-          timeout
-        );
-      };
-    },
-    [
-      query,
-      token
-    ]
-  );
-
-  const search =
-    async (
-      selectedUsername = ""
-    ) => {
-      const username =
-        String(
-          selectedUsername ||
-          query
-        ).trim();
-
-      if (!username) {
-        return;
-      }
-
-      setQuery(
-        username
-      );
-
+    if(!value){
       setSuggestions([]);
-      setMessage(
-        "Searching..."
-      );
-      setProfile(
-        null
-      );
+      setSuggesting(false);
+      setMessage("");
+      return;
+    }
 
-      try {
-        const result =
-          await api(
-            `/api/profiles/${encodeURIComponent(username)}`,
-            {},
-            token
-          );
+    let cancelled=false;
 
-        setProfile(
-          result.profile
+    const timeout=setTimeout(async()=>{
+      setSuggesting(true);
+      setMessage("");
+
+      try{
+        const result=await api(
+          `/api/profiles/search?q=${encodeURIComponent(value)}`,
+          {},
+          token
         );
 
-        setMessage(
-          ""
-        );
-      } catch (
-        error
-      ) {
-        setMessage(
-          error.message
-        );
+        if(cancelled)return;
+
+        setSuggestions(result.results||[]);
+      }catch(error){
+        if(cancelled)return;
+        setSuggestions([]);
+        setMessage(error.message);
+      }finally{
+        if(!cancelled){
+          setSuggesting(false);
+        }
       }
+    },120);
+
+    return()=>{
+      cancelled=true;
+      clearTimeout(timeout);
     };
+  },[query,token]);
 
-  return (
-    <div className="page-stack">
-      <SectionHead
-        kicker="ROBLOX DIRECTORY"
-        title="Profile lookup."
-        text="Start typing a Roblox username or display name. Matching Bay Café members appear instantly."
-      />
+  const openProfile=async username=>{
+    setQuery(username);
+    setSuggestions([]);
+    setMessage("Loading profile...");
+    setProfile(null);
 
-      <div className="profile-search-wrap">
-        <form
-          className="profile-search"
-          onSubmit={event => {
-            event.preventDefault();
-            search();
+    try{
+      const result=await api(
+        `/api/profiles/${encodeURIComponent(username)}`,
+        {},
+        token
+      );
+
+      setProfile(result.profile);
+      setMessage("");
+    }catch(error){
+      setMessage(error.message);
+    }
+  };
+
+  return <div className="page-stack">
+    <SectionHead
+      kicker="ROBLOX DIRECTORY"
+      title="Profile lookup."
+      text="Start typing any letter. Matching Bay Café members update live as you continue typing."
+    />
+
+    <div className="profile-search-wrap live-profile-search">
+      <div className="profile-search">
+        <Search size={17}/>
+        <input
+          value={query}
+          onChange={event=>{
+            setQuery(event.target.value);
+            setProfile(null);
           }}
-        >
-          <Search size={17}/>
-
-          <input
-            value={query}
-            onChange={event =>
-              setQuery(
-                event.target.value
-              )
-            }
-            placeholder="Start typing a name..."
-            autoComplete="off"
-          />
-
-          <button className="primary-btn">
-            Search
+          placeholder="Start typing a Roblox name..."
+          autoComplete="off"
+          autoFocus
+        />
+        {query&&
+          <button
+            type="button"
+            className="profile-clear"
+            onClick={()=>{
+              setQuery("");
+              setSuggestions([]);
+              setProfile(null);
+              setMessage("");
+            }}
+            aria-label="Clear profile search"
+          >
+            <X size={14}/>
           </button>
-        </form>
-
-        {query.trim() && (
-          <div className="profile-suggestions">
-            {suggesting ? (
-              <div className="suggestion-loading">
-                Searching Bay Café...
-              </div>
-            ) : suggestions.length ? (
-              suggestions.map(
-                item => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    onClick={() =>
-                      search(
-                        item.username
-                      )
-                    }
-                  >
-                    <img
-                      src={item.avatar}
-                      alt=""
-                    />
-
-                    <div>
-                      <strong>
-                        {item.displayName}
-                      </strong>
-
-                      <span>
-                        @{item.username}
-                        {" • "}
-                        {item.roleName}
-                      </span>
-                    </div>
-
-                    <ChevronRight size={14}/>
-                  </button>
-                )
-              )
-            ) : (
-              <div className="suggestion-empty">
-                No matching Bay Café members.
-              </div>
-            )}
-          </div>
-        )}
+        }
       </div>
 
-      {profile && (
-        <article className="profile-card">
-          <img
-            src={profile.avatar}
-            alt=""
-          />
-
-          <div className="profile-main">
-            <Badge
-              tone={
-                profile.inGroup
-                  ? "green"
-                  : "sand"
-              }
-            >
-              {profile.inGroup
-                ? "BAY CAFÉ MEMBER"
-                : "NOT IN GROUP"}
-            </Badge>
-
-            <h2>
-              {profile.displayName}
-            </h2>
-
-            <span>
-              @{profile.username}
-            </span>
-
-            <div className="profile-rank">
-              <strong>
-                {profile.roleName}
-              </strong>
-
-              <span>
-                Rank {profile.roleRank}
-              </span>
-            </div>
-
-            <p>
-              {profile.description ||
-              "No Roblox About description."}
-            </p>
-
-            <a
-              href={profile.profileUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="secondary-btn inline"
-            >
-              Open Roblox Profile
-              <ExternalLink size={14}/>
-            </a>
-          </div>
-        </article>
-      )}
-
-      {message && (
-        <div className="notice">
-          {message}
+      {query.trim()&&
+        <div className="profile-suggestions live">
+          {suggesting
+            ? <div className="suggestion-loading">Searching Bay Café...</div>
+            : suggestions.length
+              ? suggestions.map(item=>
+                <button
+                  type="button"
+                  key={item.id}
+                  onClick={()=>openProfile(item.username)}
+                >
+                  <img src={item.avatar} alt=""/>
+                  <div>
+                    <strong>{item.displayName}</strong>
+                    <span>@{item.username} • {item.roleName}</span>
+                  </div>
+                  <ChevronRight size={14}/>
+                </button>
+              )
+              : <div className="suggestion-empty">No matching Bay Café members.</div>
+          }
         </div>
-      )}
+      }
     </div>
-  );
-}
 
+    {profile&&
+      <article className="profile-card">
+        <img src={profile.avatar} alt=""/>
+        <div className="profile-main">
+          <Badge tone={profile.inGroup?"green":"sand"}>
+            {profile.inGroup?"BAY CAFÉ MEMBER":"NOT IN GROUP"}
+          </Badge>
+          <h2>{profile.displayName}</h2>
+          <span>@{profile.username}</span>
+          <div className="profile-rank">
+            <strong>{profile.roleName}</strong>
+            <span>Rank {profile.roleRank}</span>
+          </div>
+          <p>{profile.description||"No Roblox About description."}</p>
+          <a
+            href={profile.profileUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="secondary-btn inline"
+          >
+            Open Roblox Profile<ExternalLink size={14}/>
+          </a>
+        </div>
+      </article>
+    }
+
+    {message&&<div className="notice">{message}</div>}
+  </div>;
+}
 function TicketsPage({token,user,items,reload,setToast}){const[form,setForm]=useState({type:"General Support",subject:"",details:""}),[selectedId,setSelectedId]=useState(""),[reply,setReply]=useState(""),[loading,setLoading]=useState(false);const selected=items.find(x=>x.id===selectedId)||items[0]||null;useEffect(()=>{if(!selectedId&&items[0])setSelectedId(items[0].id)},[items,selectedId]);const submit=async e=>{e.preventDefault();setLoading(true);try{const r=await api("/api/tickets",{method:"POST",body:JSON.stringify(form)},token);setForm({type:"General Support",subject:"",details:""});await reload();setSelectedId(r.ticket.id);setToast("Support ticket opened")}catch(err){setToast(err.message)}finally{setLoading(false)}};const sendReply=async e=>{e.preventDefault();if(!selected||!reply.trim())return;try{const r=await api(`/api/tickets/${selected.id}/messages`,{method:"POST",body:JSON.stringify({content:reply})},token);setReply("");await reload();setSelectedId(r.ticket.id)}catch(err){setToast(err.message)}};const closeTicket=async()=>{if(!selected)return;try{await api(`/api/tickets/${selected.id}/close`,{method:"POST"},token);await reload();setToast("Ticket closed")}catch(err){setToast(err.message)}};return <div className="page-stack"><SectionHead kicker="SUPPORT CENTER" title="Website support." text="Create a ticket here and continue the conversation from the website. Discord staff can reply through the linked thread when configured."/><div className="ticket-layout"><aside className="ticket-side"><form className="ticket-form" onSubmit={submit}><h3>New Ticket</h3><label><span>TYPE</span><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option>General Support</option><option>Management Question</option><option>Exploiter Report</option><option>Resignation</option><option>Other</option></select></label><label><span>SUBJECT</span><input value={form.subject} onChange={e=>setForm({...form,subject:e.target.value})} placeholder="Short summary"/></label><label><span>MESSAGE</span><textarea rows="5" value={form.details} onChange={e=>setForm({...form,details:e.target.value})} placeholder="Explain what you need help with..."/></label><button className="primary-btn" disabled={loading}>{loading?"Opening...":"Open Ticket"}<Ticket size={14}/></button></form><div className="ticket-list"><div className="ticket-list-head"><strong>{user.capabilities?.ticketAdmin?"All Tickets":"Your Tickets"}</strong><span>{items.length}</span></div>{items.map(item=><button key={item.id} className={selected?.id===item.id?"active":""} onClick={()=>setSelectedId(item.id)}><div><strong>{item.subject}</strong><span>{item.type}</span></div><Badge tone={item.status==="open"?"green":"sand"}>{item.status}</Badge></button>)}</div></aside><section className="ticket-thread">{selected?<><div className="ticket-thread-head"><div><span className="eyebrow">{selected.type}</span><h3>{selected.subject}</h3><small>{selected.id}</small></div><div className="thread-actions"><Badge tone={selected.status==="open"?"green":"sand"}>{selected.status}</Badge>{selected.status==="open"&&<button className="secondary-btn compact" onClick={closeTicket}>Close</button>}</div></div><div className="ticket-messages">{(selected.messages||[]).map(m=><article key={m.id} className={String(m.authorId)===String(user.id)?"mine":"staff"}><div><strong>{m.authorDisplayName||m.authorUsername}</strong><span>{m.authorType==="staff"?"STAFF":"USER"}</span><small>{formatDate(m.createdAt)}</small></div><p>{m.content}</p></article>)}</div>{selected.status==="open"?<form className="ticket-reply" onSubmit={sendReply}><textarea rows="3" value={reply} onChange={e=>setReply(e.target.value)} placeholder="Write a reply..."/><button className="primary-btn">Send Reply<MessageCircleMore size={14}/></button></form>:<div className="closed-note">This ticket is closed.</div>}</>:<Empty icon={LifeBuoy} title="Select a ticket" text="Your support conversation will appear here."/>}</section></div></div>;}
 
 export default function App(){const session=useSession();if(!session.user)return <Login onLogin={session.login} checking={session.checking}/>;return <Dashboard token={session.token} user={session.user} onLogout={session.logout}/>;}

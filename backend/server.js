@@ -317,122 +317,83 @@ async function bayCafeDirectory() {
 app.get(
   "/api/profiles/search",
   auth,
-  async (
-    req,
-    res
-  ) => {
+  async (req,res) => {
     try {
-      const query =
-        String(
-          req.query.q ||
-          ""
-        )
-          .trim()
-          .toLowerCase();
+      const query=String(req.query.q||"")
+        .trim()
+        .toLowerCase();
 
-      if (!query) {
+      if(!query){
         return res.json({
-          success: true,
-          results: []
+          success:true,
+          results:[]
         });
       }
 
-      const directory =
-        await bayCafeDirectory();
+      const directory=await bayCafeDirectory();
 
-      const ranked =
-        directory
-          .filter(
-            item =>
-              item.username
-                .toLowerCase()
-                .includes(query) ||
-              item.displayName
-                .toLowerCase()
-                .includes(query)
-          )
-          .sort(
-            (
-              a,
-              b
-            ) => {
-              const aUser =
-                a.username
-                  .toLowerCase();
+      const results=directory
+        .map(item=>{
+          const username=String(item.username||"").toLowerCase();
+          const displayName=String(item.displayName||"").toLowerCase();
 
-              const bUser =
-                b.username
-                  .toLowerCase();
+          const usernameIndex=username.indexOf(query);
+          const displayIndex=displayName.indexOf(query);
 
-              const aDisplay =
-                a.displayName
-                  .toLowerCase();
+          return {
+            ...item,
+            _usernameIndex:usernameIndex,
+            _displayIndex:displayIndex,
+            _matches:usernameIndex!==-1||displayIndex!==-1
+          };
+        })
+        .filter(item=>item._matches)
+        .sort((a,b)=>{
+          const aPrefix=a._usernameIndex===0||a._displayIndex===0;
+          const bPrefix=b._usernameIndex===0||b._displayIndex===0;
 
-              const bDisplay =
-                b.displayName
-                  .toLowerCase();
+          if(aPrefix!==bPrefix){
+            return aPrefix?-1:1;
+          }
 
-              const aStarts =
-                aUser.startsWith(query) ||
-                aDisplay.startsWith(query);
-
-              const bStarts =
-                bUser.startsWith(query) ||
-                bDisplay.startsWith(query);
-
-              if (
-                aStarts !== bStarts
-              ) {
-                return aStarts
-                  ? -1
-                  : 1;
-              }
-
-              return (
-                b.roleRank -
-                a.roleRank
-              );
-            }
-          )
-          .slice(
-            0,
-            10
+          const aBest=Math.min(
+            a._usernameIndex===-1?9999:a._usernameIndex,
+            a._displayIndex===-1?9999:a._displayIndex
           );
 
-      const results =
-        await Promise.all(
-          ranked.map(
-            async item => ({
-              ...item,
-              avatar:
-                await avatarForUser(
-                  item.id
-                ).catch(
-                  () =>
-                    ""
-                )
-            })
-          )
-        );
+          const bBest=Math.min(
+            b._usernameIndex===-1?9999:b._usernameIndex,
+            b._displayIndex===-1?9999:b._displayIndex
+          );
+
+          if(aBest!==bBest){
+            return aBest-bBest;
+          }
+
+          return String(a.username).localeCompare(String(b.username));
+        })
+        .slice(0,20);
+
+      const hydrated=await Promise.all(
+        results.map(async item=>({
+          id:item.id,
+          username:item.username,
+          displayName:item.displayName,
+          roleName:item.roleName,
+          roleRank:item.roleRank,
+          avatar:await avatarForUser(item.id).catch(()=>"")
+        }))
+      );
 
       res.json({
-        success: true,
-        results
+        success:true,
+        results:hydrated
       });
-    } catch (
-      error
-    ) {
-      res
-        .status(
-          400
-        )
-        .json({
-          success:
-            false,
-          message:
-            error.message ||
-            "Profile search failed."
-        });
+    } catch(error) {
+      res.status(400).json({
+        success:false,
+        message:error.message||"Profile search failed."
+      });
     }
   }
 );

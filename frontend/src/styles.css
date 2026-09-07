@@ -645,3 +645,42 @@
 
 .submission-answers strong{display:block;font-size:9px;color:#d9edf2;}
 .submission-answers p{margin:6px 0 0;color:var(--muted);font-size:9px;line-height:1.6;}
+
+
+/* V20 — fully live letter-by-letter profile directory */
+.live-profile-search .profile-search{
+  grid-template-columns:auto minmax(0,1fr) auto;
+}
+
+.live-profile-search .profile-search input{
+  min-width:0;
+}
+
+.profile-clear{
+  width:34px;
+  height:34px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  display:grid;
+  place-items:center;
+  background:rgba(255,255,255,.025);
+  color:#9fc7d0;
+}
+
+.profile-clear:hover{
+  background:rgba(103,210,234,.08);
+}
+
+.profile-suggestions.live{
+  max-height:430px;
+  overflow:auto;
+}
+
+.profile-suggestions.live>button{
+  cursor:pointer;
+}
+
+.profile-suggestions.live>button:focus-visible{
+  outline:2px solid rgba(109,216,238,.7);
+  outline-offset:2px;
+}
