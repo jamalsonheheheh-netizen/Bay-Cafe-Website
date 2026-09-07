@@ -393,3 +393,65 @@
     grid-template-columns:1fr;
   }
 }
+
+
+/* V17 — desktop sidebar overlap fix */
+@media (min-width: 901px){
+  .app-shell{
+    display:grid;
+    grid-template-columns:254px minmax(0,1fr);
+    min-height:100vh;
+  }
+
+  .sidebar{
+    position:sticky;
+    top:0;
+    left:auto;
+    width:254px;
+    height:100vh;
+    z-index:20;
+  }
+
+  .main-panel{
+    min-width:0;
+    width:100%;
+    margin-left:0 !important;
+  }
+
+  .topbar{
+    width:100%;
+    left:auto !important;
+  }
+
+  .page-wrap{
+    width:100%;
+    max-width:none;
+    padding-left:28px;
+    padding-right:28px;
+  }
+}
+
+/* Keep the existing slide-over behavior on smaller screens. */
+@media (max-width: 900px){
+  .app-shell{
+    display:block;
+  }
+
+  .sidebar{
+    position:fixed;
+    top:0;
+    left:0;
+    height:100vh;
+    width:min(86vw,280px);
+  }
+
+  .main-panel{
+    width:100%;
+    margin-left:0 !important;
+  }
+
+  .page-wrap{
+    padding-left:18px;
+    padding-right:18px;
+  }
+}
