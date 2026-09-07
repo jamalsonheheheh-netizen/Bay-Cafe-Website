@@ -23,7 +23,7 @@ app.use(cors({origin(origin,cb){if(!origin)return cb(null,true);const clean=orig
 app.use(express.json({limit:"1mb"}));
 fs.mkdirSync(DATA_DIRECTORY,{recursive:true});
 
-const FILES={discordMessages:path.join(DATA_DIRECTORY,"discord-messages.json"),tickets:path.join(DATA_DIRECTORY,"tickets.json"),applications:path.join(DATA_DIRECTORY,"applications.json")};
+const FILES={discordMessages:path.join(DATA_DIRECTORY,"discord-messages.json"),tickets:path.join(DATA_DIRECTORY,"tickets.json"),applications:path.join(DATA_DIRECTORY,"applications.json"),applicationSubmissions:path.join(DATA_DIRECTORY,"application-submissions.json")};
 function readJson(file,fallback){try{if(!fs.existsSync(file))return fallback;const raw=fs.readFileSync(file,"utf8");return raw?JSON.parse(raw):fallback;}catch{return fallback;}}
 function writeJson(file,value){const temp=`${file}.tmp`;fs.writeFileSync(temp,JSON.stringify(value,null,2));fs.renameSync(temp,file);}
 const ROBLOX_CACHE = new Map();
@@ -857,6 +857,89 @@ app.get("/api/announcements",auth,async(_req,res)=>{
       message:error.message||"Unable to load announcements."
     });
   }
+});
+
+
+function publicSubmission(item){
+  return {
+    id:item.id,
+    applicationId:item.applicationId,
+    applicationTitle:item.applicationTitle,
+    applicant:item.applicant,
+    answers:Array.isArray(item.answers)?item.answers:[],
+    status:item.status||"pending",
+    submittedAt:item.submittedAt
+  };
+}
+
+app.post("/api/careers/:id/apply",auth,(req,res)=>{
+  const applications=readJson(FILES.applications,[]);
+  const application=applications.find(item=>String(item.id)===String(req.params.id));
+
+  if(!application){
+    return res.status(404).json({success:false,message:"Application not found."});
+  }
+
+  if(String(application.status||"closed").toLowerCase()!=="open"){
+    return res.status(400).json({success:false,message:"This application is currently closed."});
+  }
+
+  const questions=Array.isArray(application.questions)?application.questions:[];
+  const rawAnswers=Array.isArray(req.body.answers)?req.body.answers:[];
+  const answers=questions.map((question,index)=>({
+    question,
+    answer:String(rawAnswers[index]||"").trim().slice(0,3000)
+  }));
+
+  if(questions.length&&answers.some(item=>!item.answer)){
+    return res.status(400).json({success:false,message:"Please answer every application question."});
+  }
+
+  const submissions=readJson(FILES.applicationSubmissions,[]);
+  const duplicate=submissions.some(item=>
+    String(item.applicationId)===String(application.id)&&
+    String(item.applicant?.id)===String(req.user.id)
+  );
+
+  if(duplicate){
+    return res.status(409).json({success:false,message:"You already submitted this application."});
+  }
+
+  const submission={
+    id:crypto.randomUUID(),
+    applicationId:application.id,
+    applicationTitle:application.title,
+    applicant:{
+      id:req.user.id,
+      username:req.user.username,
+      displayName:req.user.displayName,
+      avatar:req.user.avatar,
+      roleName:req.user.roleName
+    },
+    answers,
+    status:"pending",
+    submittedAt:new Date().toISOString()
+  };
+
+  submissions.unshift(submission);
+  writeJson(FILES.applicationSubmissions,submissions);
+  broadcast("application:submission",publicSubmission(submission));
+
+  res.status(201).json({success:true,submission:publicSubmission(submission)});
+});
+
+app.get("/api/application-submissions",auth,(req,res)=>{
+  if(!canManageApplications(req.user)){
+    return res.status(403).json({
+      success:false,
+      message:"Leadership or Ownership access is required to view submissions."
+    });
+  }
+
+  const submissions=readJson(FILES.applicationSubmissions,[])
+    .sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt));
+
+  res.json({success:true,submissions:submissions.map(publicSubmission)});
 });
 
 function publicTicket(ticket){return {...ticket,messages:Array.isArray(ticket.messages)?ticket.messages:[]};}

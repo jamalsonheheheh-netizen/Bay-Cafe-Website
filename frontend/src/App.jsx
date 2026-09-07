@@ -183,6 +183,7 @@ function Dashboard({token,user,onLogout}){
   const[announcements,setAnnouncements]=useState([]);
   const[applications,setApplications]=useState([]);
   const[careers,setCareers]=useState([]);
+  const[submissions,setSubmissions]=useState([]);
   const[toast,setToast]=useState("");
 
   const caps=user.capabilities||{};
@@ -239,6 +240,15 @@ function Dashboard({token,user,onLogout}){
     setCareers(result.careers||[]);
   }
 
+  async function loadSubmissions(){
+    if(!canManageApplications){
+      setSubmissions([]);
+      return;
+    }
+    const result=await api("/api/application-submissions",{},token);
+    setSubmissions(result.submissions||[]);
+  }
+
   useEffect(()=>{
     loadStats().catch(()=>{});
     loadDiscord().catch(()=>{});
@@ -246,6 +256,7 @@ function Dashboard({token,user,onLogout}){
     loadAnnouncements().catch(()=>{});
     loadCareers().catch(()=>{});
     loadApplications().catch(()=>{});
+    loadSubmissions().catch(()=>{});
 
     const interval=setInterval(()=>{
       loadStats().catch(()=>{});
@@ -254,6 +265,7 @@ function Dashboard({token,user,onLogout}){
       loadAnnouncements().catch(()=>{});
       loadCareers().catch(()=>{});
       loadApplications().catch(()=>{});
+      loadSubmissions().catch(()=>{});
     },15000);
 
     return()=>clearInterval(interval);
@@ -294,6 +306,7 @@ function Dashboard({token,user,onLogout}){
     stream.addEventListener("discord:delete",dd);
     stream.addEventListener("ticket:update",tu);
     stream.addEventListener("application:update",au);
+    stream.addEventListener("application:submission",()=>loadSubmissions().catch(()=>{}));
 
     return()=>stream.close();
   },[token]);
@@ -399,7 +412,7 @@ function Dashboard({token,user,onLogout}){
         }
 
         {page==="careers"&&
-          <CareersPage items={careers}/>
+          <CareersPage token={token} items={careers} setToast={setToast}/>
         }
 
         {page==="applications"&&canManageApplications&&
@@ -408,6 +421,7 @@ function Dashboard({token,user,onLogout}){
             user={user}
             items={applications}
             canManage={canManageApplications}
+            submissions={submissions}
             reload={async()=>{
               await Promise.all([
                 loadApplications(),
@@ -734,7 +748,42 @@ function AnnouncementsPage({items}){
 }
 
 
-function CareersPage({items}){
+function CareersPage({token,items,setToast}){
+  const[applying,setApplying]=useState(null);
+  const[answers,setAnswers]=useState([]);
+  const[message,setMessage]=useState("");
+  const[submitting,setSubmitting]=useState(false);
+
+  const begin=item=>{
+    setApplying(item);
+    setAnswers((item.questions||[]).map(()=>""));
+    setMessage("");
+    window.scrollTo({top:0,behavior:"smooth"});
+  };
+
+  const submit=async event=>{
+    event.preventDefault();
+    if(!applying)return;
+
+    setSubmitting(true);
+    setMessage("");
+
+    try{
+      await api(
+        `/api/careers/${applying.id}/apply`,
+        {method:"POST",body:JSON.stringify({answers})},
+        token
+      );
+      setToast("Application submitted.");
+      setApplying(null);
+      setAnswers([]);
+    }catch(error){
+      setMessage(error.message);
+    }finally{
+      setSubmitting(false);
+    }
+  };
+
   return <div className="page-stack">
     <SectionHead
       kicker="BAY CAFÉ OPPORTUNITIES"
@@ -743,15 +792,42 @@ function CareersPage({items}){
       right={<Badge tone="green">{items.length} OPEN</Badge>}
     />
 
-    <div className="careers-hero">
-      <div>
-        <span className="eyebrow"><BriefcaseBusiness size={13}/>JOIN THE TEAM</span>
-        <h2>Find your next opportunity at Bay Café.</h2>
-        <p>
-          Open positions and applications appear here automatically when Leadership or Ownership publishes them.
-        </p>
-      </div>
-    </div>
+    {applying&&
+      <form className="career-apply-panel" onSubmit={submit}>
+        <div className="career-apply-head">
+          <div>
+            <span className="eyebrow">APPLICATION FORM</span>
+            <h2>{applying.title}</h2>
+          </div>
+          <button type="button" className="secondary-btn" onClick={()=>setApplying(null)}>
+            Cancel
+          </button>
+        </div>
+
+        {(applying.questions||[]).map((question,index)=>
+          <label key={index}>
+            {index+1}. {question}
+            <textarea
+              rows={4}
+              value={answers[index]||""}
+              onChange={event=>{
+                const next=[...answers];
+                next[index]=event.target.value;
+                setAnswers(next);
+              }}
+              required
+            />
+          </label>
+        )}
+
+        <div className="button-row">
+          <button className="primary-btn" disabled={submitting}>
+            {submitting?"Submitting...":"Submit Application"}
+          </button>
+          {message&&<span className="form-message">{message}</span>}
+        </div>
+      </form>
+    }
 
     <div className="careers-grid">
       {items.length
@@ -764,26 +840,15 @@ function CareersPage({items}){
               </div>
               <BriefcaseBusiness size={18}/>
             </div>
-
             {item.description&&<p>{item.description}</p>}
-
-            {(item.questions||[]).length>0&&
-              <div className="career-preview">
-                <span>APPLICATION QUESTIONS</span>
-                <ol>
-                  {item.questions.slice(0,4).map((question,index)=>
-                    <li key={index}>{question}</li>
-                  )}
-                </ol>
-                {item.questions.length>4&&
-                  <small>+{item.questions.length-4} more questions</small>
-                }
-              </div>
-            }
-
             <div className="career-meta">
               <span>Published by @{item.updatedBy||item.createdBy||"Leadership"}</span>
               <span>{formatDate(item.updatedAt||item.createdAt)}</span>
+            </div>
+            <div className="button-row career-actions">
+              <button className="primary-btn" onClick={()=>begin(item)}>
+                Apply Now<ChevronRight size={15}/>
+              </button>
             </div>
           </article>
         )
@@ -796,8 +861,7 @@ function CareersPage({items}){
     </div>
   </div>;
 }
-
-function ApplicationsPage({token,user,items,canManage,reload,setToast}){
+function ApplicationsPage({token,user,items,canManage,submissions,reload,setToast}){
   const[editing,setEditing]=useState(null);
   const[title,setTitle]=useState("");
   const[description,setDescription]=useState("");
@@ -1016,6 +1080,48 @@ function ApplicationsPage({token,user,items,canManage,reload,setToast}){
                 ? "Create the first Bay Café application above."
                 : "Leadership has not published any applications yet."
             }
+          />
+      }
+    </div>
+
+    <SectionHead
+      kicker="SUBMISSIONS"
+      title="Application submissions."
+      text="Only Leadership and Ownership can view submitted applications."
+      right={<Badge tone="green">{(submissions||[]).length} RECEIVED</Badge>}
+    />
+
+    <div className="submissions-grid">
+      {(submissions||[]).length
+        ? submissions.map(submission=>
+          <article className="submission-card" key={submission.id}>
+            <div className="submission-head">
+              <img src={submission.applicant?.avatar} alt=""/>
+              <div>
+                <strong>{submission.applicant?.displayName||submission.applicant?.username}</strong>
+                <span>@{submission.applicant?.username} • {submission.applicationTitle}</span>
+              </div>
+              <Badge tone="sand">{String(submission.status||"pending").toUpperCase()}</Badge>
+            </div>
+
+            <div className="submission-answers">
+              {(submission.answers||[]).map((entry,index)=>
+                <div key={index}>
+                  <strong>{entry.question}</strong>
+                  <p>{entry.answer}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="application-meta">
+              <span>Submitted {formatDate(submission.submittedAt)}</span>
+            </div>
+          </article>
+        )
+        : <Empty
+            icon={FilePenLine}
+            title="No submissions yet"
+            text="Submitted Career applications will appear here."
           />
       }
     </div>

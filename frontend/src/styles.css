@@ -563,3 +563,85 @@
     grid-template-columns:1fr;
   }
 }
+
+
+/* V19 — career application submissions */
+.career-actions{margin-top:18px;}
+
+.career-apply-panel{
+  padding:22px;
+  border:1px solid var(--line);
+  border-radius:19px;
+  background:linear-gradient(145deg,rgba(11,55,71,.86),rgba(5,29,40,.94));
+}
+
+.career-apply-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:14px;
+  margin-bottom:17px;
+}
+
+.career-apply-head h2{margin:6px 0 0;font-size:22px;}
+
+.career-apply-panel label{
+  display:block;
+  margin-top:15px;
+  color:#d9edf2;
+  font-size:10px;
+  font-weight:700;
+  line-height:1.5;
+}
+
+.career-apply-panel textarea{
+  width:100%;
+  margin-top:7px;
+  padding:12px 13px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  outline:none;
+  resize:vertical;
+  background:rgba(3,23,32,.72);
+  color:#fff;
+  font:inherit;
+}
+
+.submissions-grid{display:grid;gap:13px;}
+
+.submission-card{
+  padding:19px;
+  border:1px solid var(--line);
+  border-radius:17px;
+  background:rgba(7,38,50,.77);
+}
+
+.submission-head{
+  display:grid;
+  grid-template-columns:44px minmax(0,1fr) auto;
+  align-items:center;
+  gap:11px;
+}
+
+.submission-head img{
+  width:44px;
+  height:44px;
+  border-radius:12px;
+  object-fit:cover;
+}
+
+.submission-head strong,.submission-head span{display:block;}
+.submission-head strong{font-size:11px;}
+.submission-head span{margin-top:3px;color:var(--muted);font-size:8px;}
+
+.submission-answers{margin-top:16px;display:grid;gap:11px;}
+
+.submission-answers>div{
+  padding:13px;
+  border-radius:12px;
+  background:rgba(255,255,255,.025);
+  border:1px solid rgba(255,255,255,.045);
+}
+
+.submission-answers strong{display:block;font-size:9px;color:#d9edf2;}
+.submission-answers p{margin:6px 0 0;color:var(--muted);font-size:9px;line-height:1.6;}
