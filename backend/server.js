@@ -184,37 +184,28 @@ function hierarchyFor(roleName="",rank=0){
     "management"
   ];
 
-  let tier="staff";
+  const directing=[
+    "directing team",
+    "directing"
+  ];
 
-  /*
-   * Rank takes priority at the top of the hierarchy. This prevents an
-   * Ownership member with a title such as President / Vice President
-   * from being incorrectly classified as Leadership.
-   */
-  if(
-    numericRank>=240 ||
-    ownership.some(value=>name.includes(value))
-  ){
+  let tier="community";
+
+  if(numericRank>=240||ownership.some(value=>name.includes(value))){
     tier="ownership";
-  }else if(
-    numericRank>=200 ||
-    leadership.some(value=>name.includes(value))
-  ){
+  }else if(numericRank>=200||leadership.some(value=>name.includes(value))){
     tier="leadership";
-  }else if(
-    numericRank>=150 ||
-    governance.some(value=>name.includes(value))
-  ){
+  }else if(numericRank>=150||governance.some(value=>name.includes(value))){
     tier="governance";
-  }else if(
-    numericRank>=100 ||
-    management.some(value=>name.includes(value))
-  ){
+  }else if(numericRank>=100||management.some(value=>name.includes(value))){
     tier="management";
+  }else if(directing.some(value=>name.includes(value))){
+    tier="directing";
   }
 
   const levels={
-    staff:1,
+    community:0,
+    directing:1,
     management:2,
     governance:3,
     leadership:4,
@@ -227,10 +218,10 @@ function hierarchyFor(roleName="",rank=0){
     tier,
     level,
     capabilities:{
-      overview:true,
-      discord:true,
-      profiles:true,
-      tickets:true,
+      overview:level>=1,
+      discord:level>=1,
+      profiles:level>=1,
+      tickets:level>=1,
       managementInfo:level>=2,
       governanceInfo:level>=3,
       ticketAdmin:level>=3,
@@ -240,12 +231,45 @@ function hierarchyFor(roleName="",rank=0){
   };
 }
 
-async function buildWebsiteUser(username){
-  const basic=await robloxUserByUsername(username); if(!basic)throw new Error("Roblox user not found.");
-  const [details,membership,avatar]=await Promise.all([robloxUserDetails(basic.id),groupMembership(basic.id),avatarForUser(basic.id)]);
-  if(!membership)throw new Error("This Roblox account is not in the Bay Café group.");
-  const hierarchy=hierarchyFor(membership.role?.name||"",membership.role?.rank||0);
-  return {id:basic.id,username:basic.name,displayName:basic.displayName,description:details.description||"",avatar,profileUrl:`https://www.roblox.com/users/${basic.id}/profile`,roleName:membership.role?.name||"Member",roleRank:membership.role?.rank||0,tier:hierarchy.tier,level:hierarchy.level,capabilities:hierarchy.capabilities};
+function isStaffAccess(user){
+  return Number(user?.level||0)>=1;
+}
+
+async function buildWebsiteUser(username,{allowGuest=false}={}){
+  const basic=await robloxUserByUsername(username);
+
+  if(!basic){
+    throw new Error("Roblox user not found.");
+  }
+
+  const [details,membership,avatar]=await Promise.all([
+    robloxUserDetails(basic.id),
+    groupMembership(basic.id),
+    avatarForUser(basic.id)
+  ]);
+
+  if(!membership&&!allowGuest){
+    throw new Error("This Roblox account is not in the Bay Café group.");
+  }
+
+  const roleName=membership?.role?.name||"Guest";
+  const roleRank=membership?.role?.rank||0;
+  const hierarchy=hierarchyFor(roleName,roleRank);
+
+  return {
+    id:basic.id,
+    username:basic.name,
+    displayName:basic.displayName,
+    description:details.description||"",
+    avatar,
+    profileUrl:`https://www.roblox.com/users/${basic.id}/profile`,
+    inGroup:Boolean(membership),
+    roleName,
+    roleRank,
+    tier:hierarchy.tier,
+    level:hierarchy.level,
+    capabilities:hierarchy.capabilities
+  };
 }
 
 const SESSION_SECRET=String(process.env.SESSION_SIGNING_SECRET||process.env.DISCORD_BOT_TOKEN||"bay-cafe-local-development-only");
@@ -255,8 +279,84 @@ function verifySessionToken(token){const p=String(token||"").split(".");if(p.len
 function auth(req,res,next){const h=String(req.headers.authorization||"");const token=h.startsWith("Bearer ")?h.slice(7).trim():"";const user=verifySessionToken(token);if(!user)return res.status(401).json({success:false,message:"Sign in required."});req.user=user;req.sessionToken=token;next();}
 
 const authChallenges=new Map();
-app.post("/api/auth/start",async(req,res)=>{try{const username=String(req.body.username||"").trim();if(!username)return res.status(400).json({success:false,message:"Enter a Roblox username."});const user=await buildWebsiteUser(username);const challengeId=crypto.randomUUID();const code=`BAY-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;authChallenges.set(challengeId,{user,code,expiresAt:Date.now()+10*60*1000});res.json({success:true,challengeId,code,profileUrl:user.profileUrl,user:{username:user.username,displayName:user.displayName,avatar:user.avatar,roleName:user.roleName}});}catch(error){res.status(400).json({success:false,message:error.message||"Unable to start sign in."});}});
-app.post("/api/auth/verify",async(req,res)=>{try{const c=authChallenges.get(String(req.body.challengeId||""));if(!c||c.expiresAt<=Date.now())throw new Error("Verification code expired. Start again.");const latest=await robloxUserDetailsFresh(c.user.id);if(!String(latest.description||"").includes(c.code))throw new Error("Code not found in your Roblox About section yet.");const user=await buildWebsiteUser(c.user.username);const token=createSessionToken(user);authChallenges.delete(String(req.body.challengeId||""));res.json({success:true,token,user,persistent:true});}catch(error){res.status(400).json({success:false,message:error.message||"Unable to finish sign in."});}});
+
+app.post("/api/auth/start",async(req,res)=>{
+  try{
+    const username=String(req.body.username||"").trim();
+    const mode=String(req.body.mode||"staff").toLowerCase()==="community"?"community":"staff";
+
+    if(!username){
+      return res.status(400).json({success:false,message:"Enter a Roblox username."});
+    }
+
+    const user=await buildWebsiteUser(username,{allowGuest:mode==="community"});
+
+    if(mode==="staff"&&!isStaffAccess(user)){
+      return res.status(403).json({
+        success:false,
+        message:"Staff access begins at Directing Team. Use Community Access if you are Entry Team, a Visitor, or a Guest."
+      });
+    }
+
+    const challengeId=crypto.randomUUID();
+    const code=`BAY-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+
+    authChallenges.set(challengeId,{
+      user,
+      code,
+      mode,
+      expiresAt:Date.now()+10*60*1000
+    });
+
+    res.json({
+      success:true,
+      challengeId,
+      code,
+      mode,
+      profileUrl:user.profileUrl,
+      user:{
+        username:user.username,
+        displayName:user.displayName,
+        avatar:user.avatar,
+        roleName:user.roleName
+      }
+    });
+  }catch(error){
+    res.status(400).json({success:false,message:error.message||"Unable to start sign in."});
+  }
+});
+
+app.post("/api/auth/verify",async(req,res)=>{
+  try{
+    const c=authChallenges.get(String(req.body.challengeId||""));
+
+    if(!c||c.expiresAt<=Date.now()){
+      throw new Error("Verification code expired. Start again.");
+    }
+
+    const latest=await robloxUserDetailsFresh(c.user.id);
+
+    if(!String(latest.description||"").includes(c.code)){
+      throw new Error("Code not found in your Roblox About section yet.");
+    }
+
+    const user=await buildWebsiteUser(c.user.username,{allowGuest:c.mode==="community"});
+
+    if(c.mode==="staff"&&!isStaffAccess(user)){
+      return res.status(403).json({success:false,message:"Staff access begins at Directing Team."});
+    }
+
+    user.accessMode=c.mode;
+
+    const token=createSessionToken(user);
+
+    authChallenges.delete(String(req.body.challengeId||""));
+
+    res.json({success:true,token,user,persistent:true});
+  }catch(error){
+    res.status(400).json({success:false,message:error.message||"Unable to finish sign in."});
+  }
+});
 app.get("/api/auth/me",auth,(req,res)=>res.json({success:true,user:req.user,persistent:true}));
 app.post("/api/auth/logout",auth,(_req,res)=>res.json({success:true}));
 

@@ -684,3 +684,246 @@
   outline:2px solid rgba(109,216,238,.7);
   outline-offset:2px;
 }
+
+
+/* V21 — separate Community Access + Directing Team staff gate */
+.access-switch{
+  width:100%;
+  margin-top:12px;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  background:rgba(255,255,255,.025);
+  color:#a9ced7;
+  font-size:9px;
+  font-weight:700;
+}
+
+.access-switch:hover{
+  background:rgba(100,210,232,.06);
+}
+
+.community-login .login-card{
+  max-width:560px;
+}
+
+.community-shell{
+  min-height:100vh;
+  background:
+    radial-gradient(circle at 12% 8%,rgba(91,210,233,.10),transparent 28%),
+    linear-gradient(180deg,#071f2a,#061923 62%,#05151d);
+  color:#fff;
+}
+
+.community-header{
+  position:sticky;
+  top:0;
+  z-index:30;
+  min-height:72px;
+  padding:12px 28px;
+  border-bottom:1px solid var(--line);
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:center;
+  gap:20px;
+  background:rgba(5,24,33,.90);
+  backdrop-filter:blur(18px);
+}
+
+.community-brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.community-brand strong,
+.community-brand span{
+  display:block;
+}
+
+.community-brand strong{
+  font-size:14px;
+  letter-spacing:.06em;
+}
+
+.community-brand span{
+  margin-top:2px;
+  color:#6f9ba6;
+  font-size:7px;
+  letter-spacing:.15em;
+}
+
+.community-nav{
+  display:flex;
+  justify-content:center;
+  flex-wrap:wrap;
+  gap:6px;
+}
+
+.community-nav button{
+  min-height:38px;
+  padding:0 12px;
+  border:1px solid transparent;
+  border-radius:10px;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  background:transparent;
+  color:#8fb4bd;
+  font-size:9px;
+  font-weight:700;
+}
+
+.community-nav button.active,
+.community-nav button:hover{
+  border-color:var(--line);
+  background:rgba(91,209,233,.07);
+  color:#e8fbff;
+}
+
+.community-account{
+  display:grid;
+  grid-template-columns:36px minmax(0,1fr) 34px;
+  align-items:center;
+  gap:9px;
+  min-width:0;
+}
+
+.community-account img{
+  width:36px;
+  height:36px;
+  border-radius:10px;
+  object-fit:cover;
+}
+
+.community-account strong,
+.community-account span{
+  display:block;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.community-account strong{
+  font-size:9px;
+}
+
+.community-account span{
+  margin-top:2px;
+  color:#6f9ba6;
+  font-size:7px;
+}
+
+.community-account button{
+  width:34px;
+  height:34px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  display:grid;
+  place-items:center;
+  background:rgba(255,255,255,.025);
+  color:#a9ced7;
+}
+
+.community-page{
+  width:min(1180px,calc(100% - 36px));
+  margin:0 auto;
+  padding:34px 0 54px;
+}
+
+.community-hero{
+  min-height:330px;
+  padding:38px;
+  border:1px solid var(--line);
+  border-radius:23px;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:center;
+  background:
+    radial-gradient(circle at 83% 18%,rgba(100,215,235,.17),transparent 25%),
+    linear-gradient(145deg,rgba(10,55,72,.88),rgba(6,30,41,.94));
+  overflow:hidden;
+}
+
+.community-hero h1{
+  max-width:720px;
+  margin:15px 0 0;
+  font-size:clamp(36px,6vw,72px);
+  line-height:.96;
+  letter-spacing:-.04em;
+}
+
+.community-hero h1 em{
+  display:block;
+  color:#8adbea;
+  font-style:normal;
+}
+
+.community-hero p{
+  max-width:650px;
+  margin:18px 0 0;
+  color:#9fc1c9;
+  font-size:11px;
+  line-height:1.75;
+}
+
+.community-info-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:13px;
+}
+
+.community-info-grid article{
+  padding:20px;
+  border:1px solid var(--line);
+  border-radius:17px;
+  background:rgba(7,38,50,.74);
+}
+
+.community-info-grid svg{
+  color:#7fd9ea;
+}
+
+.community-info-grid h3{
+  margin:14px 0 0;
+  font-size:15px;
+}
+
+.community-info-grid p{
+  margin:8px 0 0;
+  color:var(--muted);
+  font-size:9px;
+  line-height:1.65;
+}
+
+@media(max-width:900px){
+  .community-header{
+    grid-template-columns:1fr auto;
+    padding:12px 18px;
+  }
+
+  .community-nav{
+    grid-column:1/-1;
+    justify-content:flex-start;
+    overflow-x:auto;
+    flex-wrap:nowrap;
+    padding-bottom:2px;
+  }
+
+  .community-account>div{
+    display:none;
+  }
+
+  .community-info-grid{
+    grid-template-columns:1fr;
+  }
+
+  .community-hero{
+    padding:26px 22px;
+  }
+}
