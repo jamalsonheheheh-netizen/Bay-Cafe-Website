@@ -182,6 +182,7 @@ function Dashboard({token,user,onLogout}){
   const[tickets,setTickets]=useState([]);
   const[announcements,setAnnouncements]=useState([]);
   const[applications,setApplications]=useState([]);
+  const[careers,setCareers]=useState([]);
   const[toast,setToast]=useState("");
 
   const caps=user.capabilities||{};
@@ -193,7 +194,8 @@ function Dashboard({token,user,onLogout}){
     {id:"overview",label:"Overview",icon:Waves,show:true},
     {id:"announcements",label:"Announcements",icon:Megaphone,show:true},
     {id:"discord",label:"Community Activity",icon:MessageCircleMore,show:caps.discord},
-    {id:"applications",label:"Applications",icon:FilePenLine,show:true},
+    {id:"careers",label:"Careers",icon:BriefcaseBusiness,show:true},
+    {id:"applications",label:"Applications",icon:FilePenLine,show:canManageApplications},
     {id:"information",label:"Information",icon:BookOpen,show:true},
     {id:"profiles",label:"Profiles",icon:UserRoundSearch,show:caps.profiles},
     {id:"tickets",label:"Support",icon:LifeBuoy,show:caps.tickets}
@@ -223,8 +225,18 @@ function Dashboard({token,user,onLogout}){
   }
 
   async function loadApplications(){
+    if(!canManageApplications){
+      setApplications([]);
+      return;
+    }
+
     const result=await api("/api/applications",{},token);
     setApplications(result.applications||[]);
+  }
+
+  async function loadCareers(){
+    const result=await api("/api/careers",{},token);
+    setCareers(result.careers||[]);
   }
 
   useEffect(()=>{
@@ -232,6 +244,7 @@ function Dashboard({token,user,onLogout}){
     loadDiscord().catch(()=>{});
     loadTickets().catch(()=>{});
     loadAnnouncements().catch(()=>{});
+    loadCareers().catch(()=>{});
     loadApplications().catch(()=>{});
 
     const interval=setInterval(()=>{
@@ -239,6 +252,7 @@ function Dashboard({token,user,onLogout}){
       loadDiscord().catch(()=>{});
       loadTickets().catch(()=>{});
       loadAnnouncements().catch(()=>{});
+      loadCareers().catch(()=>{});
       loadApplications().catch(()=>{});
     },15000);
 
@@ -272,6 +286,7 @@ function Dashboard({token,user,onLogout}){
     };
 
     const au=()=>{
+      loadCareers().catch(()=>{});
       loadApplications().catch(()=>{});
     };
 
@@ -298,6 +313,7 @@ function Dashboard({token,user,onLogout}){
   const pageTitle=
     page==="announcements"?"Announcements":
     page==="discord"?"Community Activity":
+    page==="careers"?"Careers":
     page==="applications"?"Applications":
     page==="information"?"Information Hub":
     page==="profiles"?"Profile Lookup":
@@ -382,13 +398,22 @@ function Dashboard({token,user,onLogout}){
           <DiscordTracker messages={discordMessages} channels={discordChannels}/>
         }
 
-        {page==="applications"&&
+        {page==="careers"&&
+          <CareersPage items={careers}/>
+        }
+
+        {page==="applications"&&canManageApplications&&
           <ApplicationsPage
             token={token}
             user={user}
             items={applications}
             canManage={canManageApplications}
-            reload={loadApplications}
+            reload={async()=>{
+              await Promise.all([
+                loadApplications(),
+                loadCareers()
+              ]);
+            }}
             setToast={setToast}
           />
         }
@@ -708,6 +733,70 @@ function AnnouncementsPage({items}){
   </div>;
 }
 
+
+function CareersPage({items}){
+  return <div className="page-stack">
+    <SectionHead
+      kicker="BAY CAFÉ OPPORTUNITIES"
+      title="Careers."
+      text="Explore currently open Bay Café applications published by Leadership and Ownership."
+      right={<Badge tone="green">{items.length} OPEN</Badge>}
+    />
+
+    <div className="careers-hero">
+      <div>
+        <span className="eyebrow"><BriefcaseBusiness size={13}/>JOIN THE TEAM</span>
+        <h2>Find your next opportunity at Bay Café.</h2>
+        <p>
+          Open positions and applications appear here automatically when Leadership or Ownership publishes them.
+        </p>
+      </div>
+    </div>
+
+    <div className="careers-grid">
+      {items.length
+        ? items.map(item=>
+          <article className="career-card" key={item.id}>
+            <div className="career-card-head">
+              <div>
+                <Badge tone="green">OPEN</Badge>
+                <h3>{item.title}</h3>
+              </div>
+              <BriefcaseBusiness size={18}/>
+            </div>
+
+            {item.description&&<p>{item.description}</p>}
+
+            {(item.questions||[]).length>0&&
+              <div className="career-preview">
+                <span>APPLICATION QUESTIONS</span>
+                <ol>
+                  {item.questions.slice(0,4).map((question,index)=>
+                    <li key={index}>{question}</li>
+                  )}
+                </ol>
+                {item.questions.length>4&&
+                  <small>+{item.questions.length-4} more questions</small>
+                }
+              </div>
+            }
+
+            <div className="career-meta">
+              <span>Published by @{item.updatedBy||item.createdBy||"Leadership"}</span>
+              <span>{formatDate(item.updatedAt||item.createdAt)}</span>
+            </div>
+          </article>
+        )
+        : <Empty
+            icon={BriefcaseBusiness}
+            title="No open careers right now"
+            text="When Leadership or Ownership opens an application, it will automatically appear here."
+          />
+      }
+    </div>
+  </div>;
+}
+
 function ApplicationsPage({token,user,items,canManage,reload,setToast}){
   const[editing,setEditing]=useState(null);
   const[title,setTitle]=useState("");
@@ -801,16 +890,8 @@ function ApplicationsPage({token,user,items,canManage,reload,setToast}){
     <SectionHead
       kicker={canManage?"LEADERSHIP APPLICATION CONTROL":"APPLICATION CENTER"}
       title="Applications."
-      text={
-        canManage
-          ? "Create, open, close, and edit Bay Café applications directly from the website."
-          : "View the applications currently configured by Bay Café Leadership and Ownership."
-      }
-      right={
-        canManage
-          ? <Badge tone="green">MANAGEMENT ENABLED</Badge>
-          : <Badge>VIEW ONLY</Badge>
-      }
+      text="Create, open, close, edit, and remove Bay Café applications. Open applications automatically appear in Careers."
+      right={<Badge tone="green">LEADERSHIP / OWNERSHIP</Badge>}
     />
 
     {canManage&&

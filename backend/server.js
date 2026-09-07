@@ -618,13 +618,31 @@ function publicApplication(item){
   };
 }
 
-app.get("/api/applications",auth,(_req,res)=>{
+app.get("/api/applications",auth,(req,res)=>{
+  if(!canManageApplications(req.user)){
+    return res.status(403).json({
+      success:false,
+      message:"Leadership or Ownership access is required to manage applications."
+    });
+  }
+
   const items=readJson(FILES.applications,[])
     .sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt));
 
   res.json({
     success:true,
     applications:items.map(publicApplication)
+  });
+});
+
+app.get("/api/careers",auth,(_req,res)=>{
+  const items=readJson(FILES.applications,[])
+    .filter(item=>String(item.status||"closed").toLowerCase()==="open")
+    .sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt));
+
+  res.json({
+    success:true,
+    careers:items.map(publicApplication)
   });
 });
 
