@@ -23,7 +23,7 @@ app.use(cors({origin(origin,cb){if(!origin)return cb(null,true);const clean=orig
 app.use(express.json({limit:"1mb"}));
 fs.mkdirSync(DATA_DIRECTORY,{recursive:true});
 
-const FILES={discordMessages:path.join(DATA_DIRECTORY,"discord-messages.json"),tickets:path.join(DATA_DIRECTORY,"tickets.json"),applications:path.join(DATA_DIRECTORY,"applications.json"),applicationSubmissions:path.join(DATA_DIRECTORY,"application-submissions.json")};
+const FILES={discordMessages:path.join(DATA_DIRECTORY,"discord-messages.json"),tickets:path.join(DATA_DIRECTORY,"tickets.json"),applications:path.join(DATA_DIRECTORY,"applications.json"),applicationSubmissions:path.join(DATA_DIRECTORY,"application-submissions.json"),activitySettings:path.join(DATA_DIRECTORY,"activity-settings.json"),activityArchive:path.join(DATA_DIRECTORY,"activity-archive.json")};
 function readJson(file,fallback){try{if(!fs.existsSync(file))return fallback;const raw=fs.readFileSync(file,"utf8");return raw?JSON.parse(raw):fallback;}catch{return fallback;}}
 function writeJson(file,value){const temp=`${file}.tmp`;fs.writeFileSync(temp,JSON.stringify(value,null,2));fs.renameSync(temp,file);}
 const ROBLOX_CACHE = new Map();
@@ -508,7 +508,7 @@ app.get("/api/live",(req,res)=>{const user=verifySessionToken(String(req.query.t
 
 function shouldTrackMessage(message){if(!message?.guildId||!message?.id||message.author?.bot)return false;if(EXCLUDED_CHANNEL_IDS.has(String(message.channelId)))return false;if(TRACK_CHANNEL_IDS.size)return TRACK_CHANNEL_IDS.has(String(message.channelId));return true;}
 function discordRecord(message){return {id:message.id,guildId:message.guildId,channelId:message.channelId,channelName:message.channel?.name||"unknown-channel",content:message.content||"",authorId:message.author.id,authorName:message.member?.displayName||message.author.globalName||message.author.username,authorUsername:message.author.username,authorAvatar:message.author.displayAvatarURL({size:128}),createdAt:message.createdAt.toISOString(),editedAt:message.editedAt?.toISOString()||null,url:message.url,attachments:[...message.attachments.values()].map(x=>({id:x.id,name:x.name,url:x.url,contentType:x.contentType||""}))};}
-async function persistDiscordMessage(message){if(!shouldTrackMessage(message))return null;const items=readJson(FILES.discordMessages,[]),record=discordRecord(message);const next=[record,...items.filter(x=>x.id!==record.id)].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,5000);writeJson(FILES.discordMessages,next);broadcast("discord:message",record);return record;}
+async function persistDiscordMessage(message){if(!shouldTrackMessage(message))return null;const items=readJson(FILES.discordMessages,[]),record=discordRecord(message);const next=[record,...items.filter(x=>x.id!==record.id)].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,20000);writeJson(FILES.discordMessages,next);broadcast("discord:message",record);return record;}
 async function removeDiscordMessage(id){const items=readJson(FILES.discordMessages,[]),next=items.filter(x=>x.id!==id);if(next.length===items.length)return;writeJson(FILES.discordMessages,next);broadcast("discord:delete",{id});}
 async function trackedGuild(){
   if(!discordClient?.isReady())return null;
@@ -542,8 +542,16 @@ async function trackedGuild(){
 
   return null;
 }
-async function backfillDiscord(){const guild=await trackedGuild();if(!guild){console.warn("[Bay Café] No Discord guild available for tracking.");return;}const channels=await guild.channels.fetch();const eligible=[...channels.values()].filter(ch=>ch?.isTextBased?.()&&!ch.isThread?.()&&!EXCLUDED_CHANNEL_IDS.has(String(ch.id))&&(!TRACK_CHANNEL_IDS.size||TRACK_CHANNEL_IDS.has(String(ch.id))));for(const ch of eligible){if(!ch?.messages?.fetch)continue;const messages=await ch.messages.fetch({limit:50}).catch(()=>null);if(!messages)continue;for(const message of [...messages.values()].reverse())await persistDiscordMessage(message);}}
+async function backfillDiscord(){const guild=await trackedGuild();if(!guild){console.warn("[Bay Café] No Discord guild available for tracking.");return;}const channels=await guild.channels.fetch();const eligible=[...channels.values()].filter(ch=>ch?.isTextBased?.()&&!ch.isThread?.()&&!EXCLUDED_CHANNEL_IDS.has(String(ch.id))&&(!TRACK_CHANNEL_IDS.size||TRACK_CHANNEL_IDS.has(String(ch.id))));for(const ch of eligible){if(!ch?.messages?.fetch)continue;const messages=await fetchRecentMessages(ch,500).catch(()=>[]);for(const message of [...messages].reverse())await persistDiscordMessage(message);}}
 
+
+const DEFAULT_ACTIVITY_SETTINGS={weeklyRequirement:0,updatedAt:null,updatedBy:null};
+function getActivitySettings(){return {...DEFAULT_ACTIVITY_SETTINGS,...readJson(FILES.activitySettings,{})};}
+function saveActivitySettings(next){const value={...DEFAULT_ACTIVITY_SETTINGS,...next};writeJson(FILES.activitySettings,value);return value;}
+function isLeadershipOrOwnership(user){return Number(user?.level||0)>=4||["leadership","ownership"].includes(String(user?.tier||"").toLowerCase());}
+function archiveCurrentActivity(reason,user){const weekStart=startOfCurrentWeek();const current=readJson(FILES.discordMessages,[]);const thisWeek=current.filter(item=>new Date(item.createdAt)>=weekStart);const archive=readJson(FILES.activityArchive,[]);archive.unshift({id:crypto.randomUUID(),reason:String(reason||"manual"),weekStart:weekStart.toISOString(),archivedAt:new Date().toISOString(),archivedBy:user?.username||"system",messageCount:thisWeek.length,messages:thisWeek});writeJson(FILES.activityArchive,archive.slice(0,20));}
+async function fetchRecentMessages(channel,limit=1000){const collected=[];let before;while(collected.length<limit){const batch=await channel.messages.fetch({limit:Math.min(100,limit-collected.length),...(before?{before}:{})}).catch(()=>null);if(!batch||!batch.size)break;const values=[...batch.values()];collected.push(...values);before=values[values.length-1]?.id;if(batch.size<100)break;}return collected;}
+async function rebuildDiscordHistory(){const guild=await trackedGuild();if(!guild)throw new Error("Discord guild is unavailable.");const channels=await guild.channels.fetch();const eligible=[...channels.values()].filter(ch=>ch?.isTextBased?.()&&!ch.isThread?.()&&!EXCLUDED_CHANNEL_IDS.has(String(ch.id))&&(!TRACK_CHANNEL_IDS.size||TRACK_CHANNEL_IDS.has(String(ch.id))));const merged=new Map();for(const ch of eligible){if(!ch?.messages?.fetch)continue;const messages=await fetchRecentMessages(ch,1000);for(const message of messages){if(shouldTrackMessage(message)){const record=discordRecord(message);merged.set(record.id,record);}}}const sorted=[...merged.values()].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,20000);writeJson(FILES.discordMessages,sorted);broadcast("discord:rebuild",{messageCount:sorted.length});return sorted.length;}
 function startOfCurrentWeek(){
   const now=new Date();
   const day=now.getDay();
@@ -650,6 +658,12 @@ app.get("/api/discord/channels",auth,(req,res)=>{
   });
 });
 
+
+
+app.get("/api/activity/admin",auth,(req,res)=>{if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});const weekStart=startOfCurrentWeek();const all=readJson(FILES.discordMessages,[]);const thisWeek=all.filter(item=>new Date(item.createdAt)>=weekStart);const settings=getActivitySettings();const archive=readJson(FILES.activityArchive,[]);res.json({success:true,weekStart:weekStart.toISOString(),totalTracked:all.length,thisWeekTracked:thisWeek.length,settings,recentArchives:archive.slice(0,5).map(item=>({id:item.id,reason:item.reason,archivedAt:item.archivedAt,archivedBy:item.archivedBy,messageCount:item.messageCount}))});});
+app.put("/api/activity/settings",auth,(req,res)=>{if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});const weeklyRequirement=Math.max(0,Math.min(10000,Number(req.body.weeklyRequirement)||0));const settings=saveActivitySettings({weeklyRequirement,updatedAt:new Date().toISOString(),updatedBy:req.user.username});broadcast("activity:settings",settings);res.json({success:true,settings});});
+app.post("/api/activity/rebuild",auth,async(req,res)=>{if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});try{const messageCount=await rebuildDiscordHistory();res.json({success:true,messageCount});}catch(error){res.status(400).json({success:false,message:error.message||"Unable to rebuild activity."});}});
+app.post("/api/activity/reset",auth,(req,res)=>{if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});archiveCurrentActivity("manual reset",req.user);const weekStart=startOfCurrentWeek();const all=readJson(FILES.discordMessages,[]);writeJson(FILES.discordMessages,all.filter(item=>new Date(item.createdAt)<weekStart));broadcast("activity:reset",{weekStart:weekStart.toISOString()});res.json({success:true});});
 
 function canManageApplications(user){
   return Number(user?.level||0)>=4 ||
