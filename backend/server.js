@@ -143,23 +143,100 @@ async function groupIcon(){const r=await jsonFetch(`https://thumbnails.roblox.co
 async function groupMembership(userId){const r=await jsonFetch(`https://groups.roblox.com/v2/users/${userId}/groups/roles`);const entry=(r.data||[]).find(x=>String(x.group?.id)===GROUP_ID);return entry?{group:entry.group,role:entry.role}:null;}
 
 function hierarchyFor(roleName="",rank=0){
-  const name=String(roleName).toLowerCase();
-  const ownership=["owner","chairman","chairwoman","vice chairman","vice chairwoman"];
-  const leadership=["chief","leadership","president","vice president","executive"];
-  const governance=["governance","corporate","head corporate","senior corporate","junior corporate","corporate intern"];
-  const management=["head director","senior director","junior director","director","management"];
+  const name=String(roleName).toLowerCase().trim();
+  const numericRank=Number(rank)||0;
+
+  const ownership=[
+    "ownership",
+    "owner",
+    "founder",
+    "chairman",
+    "chairwoman",
+    "vice chairman",
+    "vice chairwoman",
+    "president",
+    "vice president",
+    "chief administrative officer",
+    "cao"
+  ];
+
+  const leadership=[
+    "chief",
+    "leadership",
+    "executive"
+  ];
+
+  const governance=[
+    "governance",
+    "corporate",
+    "head corporate",
+    "senior corporate",
+    "junior corporate",
+    "corporate intern"
+  ];
+
+  const management=[
+    "head director",
+    "senior director",
+    "junior director",
+    "director",
+    "management"
+  ];
+
   let tier="staff";
-  if(ownership.some(v=>name.includes(v)))tier="ownership";
-  else if(leadership.some(v=>name.includes(v)))tier="leadership";
-  else if(governance.some(v=>name.includes(v)))tier="governance";
-  else if(management.some(v=>name.includes(v)))tier="management";
-  else if(Number(rank)>=240)tier="ownership";
-  else if(Number(rank)>=200)tier="leadership";
-  else if(Number(rank)>=150)tier="governance";
-  else if(Number(rank)>=100)tier="management";
-  const levels={staff:1,management:2,governance:3,leadership:4,ownership:5};
+
+  /*
+   * Rank takes priority at the top of the hierarchy. This prevents an
+   * Ownership member with a title such as President / Vice President
+   * from being incorrectly classified as Leadership.
+   */
+  if(
+    numericRank>=240 ||
+    ownership.some(value=>name.includes(value))
+  ){
+    tier="ownership";
+  }else if(
+    numericRank>=200 ||
+    leadership.some(value=>name.includes(value))
+  ){
+    tier="leadership";
+  }else if(
+    numericRank>=150 ||
+    governance.some(value=>name.includes(value))
+  ){
+    tier="governance";
+  }else if(
+    numericRank>=100 ||
+    management.some(value=>name.includes(value))
+  ){
+    tier="management";
+  }
+
+  const levels={
+    staff:1,
+    management:2,
+    governance:3,
+    leadership:4,
+    ownership:5
+  };
+
   const level=levels[tier];
-  return {tier,level,capabilities:{overview:true,discord:true,profiles:true,tickets:true,managementInfo:level>=2,governanceInfo:level>=3,ticketAdmin:level>=3,staffAnalytics:level>=3,leadershipTools:level>=4}};
+
+  return {
+    tier,
+    level,
+    capabilities:{
+      overview:true,
+      discord:true,
+      profiles:true,
+      tickets:true,
+      managementInfo:level>=2,
+      governanceInfo:level>=3,
+      ticketAdmin:level>=3,
+      staffAnalytics:level>=3,
+      leadershipTools:level>=4
+    }
+  };
 }
 
 async function buildWebsiteUser(username){
