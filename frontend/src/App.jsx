@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {Activity,ArrowRight,Bell,BookOpen,BriefcaseBusiness,CheckCircle2,ChevronRight,Coffee,ExternalLink,LifeBuoy,Link2,LogOut,Menu,MessageCircleMore,Search,ShieldCheck,Sparkles,Ticket,UserRoundSearch,Users,Waves,X} from "lucide-react";
+import {Activity,ArrowRight,Bell,BookOpen,BriefcaseBusiness,CheckCircle2,ChevronRight,Coffee,ExternalLink,FilePenLine,LifeBuoy,Link2,LogOut,Megaphone,Menu,MessageCircleMore,Plus,Search,ShieldCheck,Sparkles,Ticket,Trash2,UserRoundSearch,Users,Waves,X} from "lucide-react";
 
 const IS_LOCAL =
   ["localhost", "127.0.0.1"].includes(
@@ -173,10 +173,360 @@ const Badge=({children,tone="aqua"})=><span className={`badge ${tone}`}>{childre
 function SectionHead({kicker,title,text,right}){return <div className="section-head"><div><span className="eyebrow">{kicker}</span><h2>{title}</h2>{text&&<p>{text}</p>}</div>{right}</div>;}
 function Empty({icon:Icon,title,text}){return <div className="empty-state"><div className="empty-icon"><Icon size={20}/></div><strong>{title}</strong><p>{text}</p></div>;}
 
-function Dashboard({token,user,onLogout}){const[page,setPage]=useState("overview"),[mobileOpen,setMobileOpen]=useState(false),[stats,setStats]=useState(null),[discordMessages,setDiscordMessages]=useState([]),[discordChannels,setDiscordChannels]=useState([]),[tickets,setTickets]=useState([]),[toast,setToast]=useState("");const caps=user.capabilities||{};const nav=useMemo(()=>[{id:"overview",label:"Overview",icon:Waves,show:true},{id:"discord",label:"Community Activity",icon:MessageCircleMore,show:caps.discord},{id:"information",label:"Information",icon:BookOpen,show:true},{id:"profiles",label:"Profiles",icon:UserRoundSearch,show:caps.profiles},{id:"tickets",label:"Support",icon:LifeBuoy,show:caps.tickets}].filter(x=>x.show),[caps]);async function loadStats(){setStats(await api("/api/stats",{},token))}async function loadDiscord(){const[m,c]=await Promise.all([api("/api/discord/messages?limit=500",{},token),api("/api/discord/channels",{},token)]);setDiscordMessages(m.messages||[]);setDiscordChannels(c.channels||[])}async function loadTickets(){const r=await api("/api/tickets",{},token);setTickets(r.tickets||[])}useEffect(()=>{loadStats().catch(()=>{});loadDiscord().catch(()=>{});loadTickets().catch(()=>{});const i=setInterval(()=>{loadStats().catch(()=>{});loadDiscord().catch(()=>{});loadTickets().catch(()=>{})},15000);return()=>clearInterval(i)},[token]);useEffect(()=>{const stream=new EventSource(`${API}/api/live?token=${encodeURIComponent(token)}`);const du=e=>{try{const item=JSON.parse(e.data);setDiscordMessages(cur=>[item,...cur.filter(x=>x.id!==item.id)]);setToast(`New Discord message in #${item.channelName}`)}catch{}};const dd=e=>{try{const item=JSON.parse(e.data);setDiscordMessages(cur=>cur.filter(x=>x.id!==item.id))}catch{}};const tu=e=>{try{const item=JSON.parse(e.data);setTickets(cur=>[item,...cur.filter(x=>x.id!==item.id)])}catch{loadTickets().catch(()=>{})}};stream.addEventListener("discord:message",du);stream.addEventListener("discord:delete",dd);stream.addEventListener("ticket:update",tu);return()=>stream.close()},[token]);useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(""),2600);return()=>clearTimeout(t)},[toast]);const open=id=>{setPage(id);setMobileOpen(false);window.scrollTo({top:0,behavior:"smooth"})};return <main className="app-shell"><aside className={`sidebar ${mobileOpen?"open":""}`}><div className="sidebar-brand"><div className="bay-mark small"><Waves size={18}/></div><div><strong>BAY CAFÉ</strong><span>STAFF HUB</span></div><button className="mobile-close" onClick={()=>setMobileOpen(false)}><X size={17}/></button></div><div className="user-mini"><img src={user.avatar} alt=""/><div><strong>{user.displayName}</strong><span>{user.roleName}</span></div></div><nav>{nav.map(item=>{const Icon=item.icon;return <button key={item.id} className={page===item.id?"active":""} onClick={()=>open(item.id)}><Icon size={16}/>{item.label}</button>})}</nav><div className="sidebar-links"><a href="https://discord.gg/ztPy6UKxY" target="_blank" rel="noreferrer">Public Discord<ExternalLink size={13}/></a><a href="https://www.roblox.com/communities/695410048/Bay-Cafe#!/about" target="_blank" rel="noreferrer">Roblox Group<ExternalLink size={13}/></a></div><button className="logout-btn" onClick={onLogout}><LogOut size={15}/>Sign out</button></aside>{mobileOpen&&<button className="sidebar-overlay" onClick={()=>setMobileOpen(false)}/>}<section className="workspace"><header className="topbar"><button className="mobile-menu" onClick={()=>setMobileOpen(true)}><Menu size={18}/></button><div className="topbar-copy"><span>BAY CAFÉ</span><strong>{page==="discord"?"Community Activity":page==="information"?"Information Hub":page==="profiles"?"Profile Lookup":page==="tickets"?"Support Center":"Staff Overview"}</strong></div><div className="topbar-status"><span className="status-dot"/>LIVE</div></header><div className="page-wrap">{page==="overview"&&<Overview user={user} stats={stats} discordMessages={discordMessages} navigate={open}/>} {page==="discord"&&<DiscordTracker messages={discordMessages} channels={discordChannels}/>} {page==="information"&&<InformationHub user={user}/>} {page==="profiles"&&<Profiles token={token}/>} {page==="tickets"&&<TicketsPage token={token} user={user} items={tickets} reload={loadTickets} setToast={setToast}/>}</div>{toast&&<div className="toast"><Sparkles size={14}/>{toast}</div>}</section></main>;}
+function Dashboard({token,user,onLogout}){
+  const[page,setPage]=useState("overview");
+  const[mobileOpen,setMobileOpen]=useState(false);
+  const[stats,setStats]=useState(null);
+  const[discordMessages,setDiscordMessages]=useState([]);
+  const[discordChannels,setDiscordChannels]=useState([]);
+  const[tickets,setTickets]=useState([]);
+  const[announcements,setAnnouncements]=useState([]);
+  const[applications,setApplications]=useState([]);
+  const[toast,setToast]=useState("");
 
-function Overview({user,stats,discordMessages,navigate}){const latest=discordMessages.slice(0,4);return <div className="page-stack"><section className="hero-grid"><article className="hero-card"><div className="hero-waterline"/><Badge>STAFF WORKSPACE</Badge><h1>Welcome back,<em>{user.displayName}.</em></h1><p>You are signed in as <strong>{user.roleName}</strong>. Your Bay Café workspace automatically changes with your rank and responsibilities.</p><div className="button-row"><button className="primary-btn" onClick={()=>navigate("discord")}>View Discord<ChevronRight size={15}/></button><button className="secondary-btn" onClick={()=>navigate("information")}>Open Information<BookOpen size={14}/></button></div></article><article className="rank-card"><div className="rank-orbit"/><img src={user.avatar} alt=""/><span className="eyebrow">YOUR ACCESS</span><h3>{user.tier?.toUpperCase()}</h3><p>{user.roleName}</p><div className="capability-tags">{Object.entries(user.capabilities||{}).filter(([,v])=>v).slice(0,6).map(([name])=><span key={name}>{name.replace(/([A-Z])/g," $1")}</span>)}</div></article></section><section><SectionHead kicker="LIVE BAY DATA" title="At a glance." text="Live Roblox and Discord integration status."/><div className="metrics-grid"><article><Users size={18}/><span>COMMUNITY</span><strong>{formatNumber(stats?.group?.memberCount)}</strong><p>Roblox members</p></article><article><MessageCircleMore size={18}/><span>YOUR MESSAGES</span><strong>{formatNumber(discordMessages.length)}</strong><p>This week</p></article><article><Activity size={18}/><span>DISCORD</span><strong>{stats?.discord?.connected?"LIVE":"OFFLINE"}</strong><p>Tracker connection</p></article></div></section><section><SectionHead kicker="LIVE DISCORD" title="Your recent activity." text="Your newest tracked Discord messages from this week." right={<button className="text-button" onClick={()=>navigate("discord")}>Open activity<ArrowRight size={13}/></button>}/><div className="discord-preview-grid">{latest.length?latest.map(m=><DiscordCard item={m} compact key={m.id}/>):<Empty icon={MessageCircleMore} title="No tracked messages" text="Once the Discord bot connects, messages will appear here."/>}</div></section></div>;}
+  const caps=user.capabilities||{};
+  const canManageApplications=
+    Number(user.level||0)>=4||
+    ["leadership","ownership"].includes(String(user.tier||"").toLowerCase());
 
+  const nav=useMemo(()=>[
+    {id:"overview",label:"Overview",icon:Waves,show:true},
+    {id:"announcements",label:"Announcements",icon:Megaphone,show:true},
+    {id:"discord",label:"Community Activity",icon:MessageCircleMore,show:caps.discord},
+    {id:"applications",label:"Applications",icon:FilePenLine,show:true},
+    {id:"information",label:"Information",icon:BookOpen,show:true},
+    {id:"profiles",label:"Profiles",icon:UserRoundSearch,show:caps.profiles},
+    {id:"tickets",label:"Support",icon:LifeBuoy,show:caps.tickets}
+  ].filter(item=>item.show),[caps]);
+
+  async function loadStats(){
+    setStats(await api("/api/stats",{},token));
+  }
+
+  async function loadDiscord(){
+    const[m,c]=await Promise.all([
+      api("/api/discord/messages?limit=500",{},token),
+      api("/api/discord/channels",{},token)
+    ]);
+    setDiscordMessages(m.messages||[]);
+    setDiscordChannels(c.channels||[]);
+  }
+
+  async function loadTickets(){
+    const result=await api("/api/tickets",{},token);
+    setTickets(result.tickets||[]);
+  }
+
+  async function loadAnnouncements(){
+    const result=await api("/api/announcements",{},token);
+    setAnnouncements(result.announcements||[]);
+  }
+
+  async function loadApplications(){
+    const result=await api("/api/applications",{},token);
+    setApplications(result.applications||[]);
+  }
+
+  useEffect(()=>{
+    loadStats().catch(()=>{});
+    loadDiscord().catch(()=>{});
+    loadTickets().catch(()=>{});
+    loadAnnouncements().catch(()=>{});
+    loadApplications().catch(()=>{});
+
+    const interval=setInterval(()=>{
+      loadStats().catch(()=>{});
+      loadDiscord().catch(()=>{});
+      loadTickets().catch(()=>{});
+      loadAnnouncements().catch(()=>{});
+      loadApplications().catch(()=>{});
+    },15000);
+
+    return()=>clearInterval(interval);
+  },[token]);
+
+  useEffect(()=>{
+    const stream=new EventSource(`${API}/api/live?token=${encodeURIComponent(token)}`);
+
+    const du=event=>{
+      try{
+        const item=JSON.parse(event.data);
+        setDiscordMessages(current=>[item,...current.filter(x=>x.id!==item.id)]);
+      }catch{}
+    };
+
+    const dd=event=>{
+      try{
+        const item=JSON.parse(event.data);
+        setDiscordMessages(current=>current.filter(x=>x.id!==item.id));
+      }catch{}
+    };
+
+    const tu=event=>{
+      try{
+        const item=JSON.parse(event.data);
+        setTickets(current=>[item,...current.filter(x=>x.id!==item.id)]);
+      }catch{
+        loadTickets().catch(()=>{});
+      }
+    };
+
+    const au=()=>{
+      loadApplications().catch(()=>{});
+    };
+
+    stream.addEventListener("discord:message",du);
+    stream.addEventListener("discord:delete",dd);
+    stream.addEventListener("ticket:update",tu);
+    stream.addEventListener("application:update",au);
+
+    return()=>stream.close();
+  },[token]);
+
+  useEffect(()=>{
+    if(!toast)return;
+    const timer=setTimeout(()=>setToast(""),2600);
+    return()=>clearTimeout(timer);
+  },[toast]);
+
+  const open=id=>{
+    setPage(id);
+    setMobileOpen(false);
+    window.scrollTo({top:0,behavior:"smooth"});
+  };
+
+  const pageTitle=
+    page==="announcements"?"Announcements":
+    page==="discord"?"Community Activity":
+    page==="applications"?"Applications":
+    page==="information"?"Information Hub":
+    page==="profiles"?"Profile Lookup":
+    page==="tickets"?"Support Center":
+    "Staff Overview";
+
+  return <main className="app-shell">
+    <aside className={`sidebar ${mobileOpen?"open":""}`}>
+      <div className="sidebar-brand">
+        <div className="bay-mark small"><Waves size={18}/></div>
+        <div><strong>BAY CAFÉ</strong><span>STAFF HUB</span></div>
+        <button className="mobile-close" onClick={()=>setMobileOpen(false)}><X size={17}/></button>
+      </div>
+
+      <div className="user-mini">
+        <img src={user.avatar} alt=""/>
+        <div><strong>{user.displayName}</strong><span>{user.roleName}</span></div>
+      </div>
+
+      <nav>
+        {nav.map(item=>{
+          const Icon=item.icon;
+          return <button
+            key={item.id}
+            className={page===item.id?"active":""}
+            onClick={()=>open(item.id)}
+          >
+            <Icon size={16}/>
+            {item.label}
+          </button>;
+        })}
+      </nav>
+
+      <div className="sidebar-links">
+        <a href="https://discord.gg/ztPy6UKxY" target="_blank" rel="noreferrer">
+          Public Discord<ExternalLink size={13}/>
+        </a>
+        <a href="https://www.roblox.com/communities/695410048/Bay-Cafe#!/about" target="_blank" rel="noreferrer">
+          Roblox Group<ExternalLink size={13}/>
+        </a>
+      </div>
+
+      <button className="logout-btn" onClick={onLogout}>
+        <LogOut size={15}/>Sign out
+      </button>
+    </aside>
+
+    {mobileOpen&&<button className="sidebar-backdrop" onClick={()=>setMobileOpen(false)}/>}
+
+    <section className="main-panel">
+      <header className="topbar">
+        <button className="mobile-menu" onClick={()=>setMobileOpen(true)}>
+          <Menu size={18}/>
+        </button>
+
+        <div className="topbar-copy">
+          <span>BAY CAFÉ</span>
+          <strong>{pageTitle}</strong>
+        </div>
+
+        <div className="topbar-status">
+          <span className="status-dot"/>LIVE
+        </div>
+      </header>
+
+      <div className="page-wrap">
+        {page==="overview"&&
+          <Overview
+            user={user}
+            stats={stats}
+            discordMessages={discordMessages}
+            announcements={announcements}
+            navigate={open}
+          />
+        }
+
+        {page==="announcements"&&
+          <AnnouncementsPage items={announcements}/>
+        }
+
+        {page==="discord"&&
+          <DiscordTracker messages={discordMessages} channels={discordChannels}/>
+        }
+
+        {page==="applications"&&
+          <ApplicationsPage
+            token={token}
+            user={user}
+            items={applications}
+            canManage={canManageApplications}
+            reload={loadApplications}
+            setToast={setToast}
+          />
+        }
+
+        {page==="information"&&<InformationHub user={user}/>}
+        {page==="profiles"&&<Profiles token={token}/>}
+        {page==="tickets"&&
+          <TicketsPage
+            token={token}
+            user={user}
+            items={tickets}
+            reload={loadTickets}
+            setToast={setToast}
+          />
+        }
+      </div>
+
+      {toast&&<div className="toast"><Sparkles size={14}/>{toast}</div>}
+    </section>
+  </main>;
+}
+function Overview({user,stats,discordMessages,announcements,navigate}){
+  const latest=discordMessages.slice(0,4);
+  const latestAnnouncements=(announcements||[]).slice(0,3);
+
+  return <div className="page-stack">
+    <section className="hero-grid">
+      <article className="hero-card">
+        <div className="hero-waterline"/>
+        <Badge>STAFF WORKSPACE</Badge>
+        <h1>Welcome back,<em>{user.displayName}.</em></h1>
+        <p>
+          You are signed in as <strong>{user.roleName}</strong>. Your Bay Café workspace
+          automatically changes with your rank and responsibilities.
+        </p>
+        <div className="button-row">
+          <button className="primary-btn" onClick={()=>navigate("announcements")}>
+            Announcements<ChevronRight size={15}/>
+          </button>
+          <button className="secondary-btn" onClick={()=>navigate("information")}>
+            Open Information<BookOpen size={14}/>
+          </button>
+        </div>
+      </article>
+
+      <article className="rank-card">
+        <div className="rank-orbit"/>
+        <img src={user.avatar} alt=""/>
+        <span className="eyebrow">YOUR ACCESS</span>
+        <h3>{user.tier?.toUpperCase()}</h3>
+        <p>{user.roleName}</p>
+        <div className="capability-tags">
+          {Object.entries(user.capabilities||{})
+            .filter(([,value])=>value)
+            .slice(0,6)
+            .map(([name])=><span key={name}>{name.replace(/([A-Z])/g," $1")}</span>)
+          }
+        </div>
+      </article>
+    </section>
+
+    <section>
+      <SectionHead
+        kicker="LIVE BAY DATA"
+        title="At a glance."
+        text="Live Roblox and Discord integration status."
+      />
+      <div className="metrics-grid">
+        <article>
+          <Users size={18}/>
+          <span>COMMUNITY</span>
+          <strong>{formatNumber(stats?.group?.memberCount)}</strong>
+          <p>Roblox members</p>
+        </article>
+        <article>
+          <MessageCircleMore size={18}/>
+          <span>YOUR MESSAGES</span>
+          <strong>{formatNumber(discordMessages.length)}</strong>
+          <p>This week</p>
+        </article>
+        <article>
+          <Activity size={18}/>
+          <span>DISCORD</span>
+          <strong>{stats?.discord?.connected?"LIVE":"OFFLINE"}</strong>
+          <p>Tracker connection</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <SectionHead
+        kicker="OFFICIAL UPDATES"
+        title="Latest announcements."
+        text="Recent posts from the official Bay Café announcement channel."
+        right={
+          <button className="text-button" onClick={()=>navigate("announcements")}>
+            View all<ArrowRight size={13}/>
+          </button>
+        }
+      />
+
+      <div className="announcement-preview-grid">
+        {latestAnnouncements.length
+          ? latestAnnouncements.map(item=><AnnouncementCard key={item.id} item={item} compact/>)
+          : <Empty
+              icon={Megaphone}
+              title="No announcements loaded"
+              text="Official Bay Café announcements will appear here once the Discord bot can read the announcement channel."
+            />
+        }
+      </div>
+    </section>
+
+    <section>
+      <SectionHead
+        kicker="LIVE DISCORD"
+        title="Your recent activity."
+        text="Your newest tracked Discord messages from this week."
+        right={
+          <button className="text-button" onClick={()=>navigate("discord")}>
+            Open activity<ArrowRight size={13}/>
+          </button>
+        }
+      />
+
+      <div className="discord-preview-grid">
+        {latest.length
+          ? latest.map(message=><DiscordCard item={message} compact key={message.id}/>)
+          : <Empty
+              icon={MessageCircleMore}
+              title="No tracked messages"
+              text="Once Discord tracking recognizes your account, your messages will appear here."
+            />
+        }
+      </div>
+    </section>
+  </div>;
+}
 function DiscordCard({item,compact=false}){const images=(item.attachments||[]).filter(f=>String(f.contentType||"").startsWith("image/")||/\.(png|jpe?g|gif|webp)$/i.test(f.name||f.url||""));return <article className={`discord-card ${compact?"compact":""}`}><div className="discord-card-head"><img src={item.authorAvatar} alt=""/><div><strong>{item.authorName}</strong><span>#{item.channelName} • {formatDate(item.createdAt)}</span></div><Bell size={14}/></div><DiscordText value={item.content||"Attachment message"}/>{images.length>0&&<div className="discord-images">{images.map(f=><a key={f.id||f.url} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} alt={f.name||"attachment"}/></a>)}</div>}<a className="message-link" href={item.url} target="_blank" rel="noreferrer">Open in Discord<ExternalLink size={12}/></a></article>;}
 function DiscordTracker({messages,channels}){
   const[channel,setChannel]=useState("all");
@@ -281,6 +631,316 @@ function DiscordTracker({messages,channels}){
 }
 
 const InfoBlock=({title,children})=><article className="info-block"><h3>{title}</h3><div className="info-body">{children}</div></article>;
+
+function AnnouncementCard({item,compact=false}){
+  const images=(item.attachments||[]).filter(file=>
+    String(file.contentType||"").startsWith("image/")||
+    /\.(png|jpe?g|gif|webp)$/i.test(file.name||file.url||"")
+  );
+
+  return <article className={`announcement-card ${compact?"compact":""}`}>
+    <div className="announcement-head">
+      <div className="announcement-avatar">
+        {item.authorAvatar
+          ? <img src={item.authorAvatar} alt=""/>
+          : <Megaphone size={17}/>
+        }
+      </div>
+      <div>
+        <strong>{item.authorName||"Bay Café"}</strong>
+        <span>#{item.channelName||"announcements"} • {formatDate(item.createdAt)}</span>
+      </div>
+      <Megaphone size={15}/>
+    </div>
+
+    {item.content&&<DiscordText value={item.content}/>}
+
+    {(item.embeds||[]).map((embed,index)=>
+      <div className="announcement-embed" key={`${item.id}-embed-${index}`}>
+        {embed.title&&<h4>{embed.title}</h4>}
+        {embed.description&&<DiscordText value={embed.description}/>}
+        {(embed.fields||[]).map((field,fieldIndex)=>
+          <div className="announcement-field" key={fieldIndex}>
+            <strong>{field.name}</strong>
+            <DiscordText value={field.value}/>
+          </div>
+        )}
+      </div>
+    )}
+
+    {images.length>0&&
+      <div className="discord-images">
+        {images.map(file=>
+          <a key={file.id||file.url} href={file.url} target="_blank" rel="noreferrer">
+            <img src={file.url} alt={file.name||"announcement attachment"}/>
+          </a>
+        )}
+      </div>
+    }
+
+    {item.url&&
+      <a className="message-link" href={item.url} target="_blank" rel="noreferrer">
+        Open in Discord<ExternalLink size={12}/>
+      </a>
+    }
+  </article>;
+}
+
+function AnnouncementsPage({items}){
+  return <div className="page-stack">
+    <SectionHead
+      kicker="OFFICIAL BAY CAFÉ"
+      title="Announcements."
+      text="Live posts from the Bay Café announcement channel."
+      right={<Badge tone="green">#{items.length} LOADED</Badge>}
+    />
+
+    <div className="announcements-list">
+      {items.length
+        ? items.map(item=><AnnouncementCard key={item.id} item={item}/>)
+        : <Empty
+            icon={Megaphone}
+            title="No announcements available"
+            text="Make sure the Bay Café Discord bot can view channel 1446415574682046495 and read message history."
+          />
+      }
+    </div>
+  </div>;
+}
+
+function ApplicationsPage({token,user,items,canManage,reload,setToast}){
+  const[editing,setEditing]=useState(null);
+  const[title,setTitle]=useState("");
+  const[description,setDescription]=useState("");
+  const[status,setStatus]=useState("open");
+  const[questions,setQuestions]=useState("");
+  const[saving,setSaving]=useState(false);
+  const[message,setMessage]=useState("");
+
+  const reset=()=>{
+    setEditing(null);
+    setTitle("");
+    setDescription("");
+    setStatus("open");
+    setQuestions("");
+    setMessage("");
+  };
+
+  const beginEdit=item=>{
+    setEditing(item.id);
+    setTitle(item.title||"");
+    setDescription(item.description||"");
+    setStatus(item.status||"open");
+    setQuestions((item.questions||[]).join("\n"));
+    setMessage("");
+    window.scrollTo({top:0,behavior:"smooth"});
+  };
+
+  const save=async event=>{
+    event.preventDefault();
+    if(!canManage)return;
+
+    setSaving(true);
+    setMessage("");
+
+    try{
+      const payload={
+        title,
+        description,
+        status,
+        questions:questions
+          .split("\n")
+          .map(value=>value.trim())
+          .filter(Boolean)
+      };
+
+      if(editing){
+        await api(
+          `/api/applications/${editing}`,
+          {method:"PUT",body:JSON.stringify(payload)},
+          token
+        );
+        setToast("Application updated.");
+      }else{
+        await api(
+          "/api/applications",
+          {method:"POST",body:JSON.stringify(payload)},
+          token
+        );
+        setToast("Application created.");
+      }
+
+      reset();
+      await reload();
+    }catch(error){
+      setMessage(error.message);
+    }finally{
+      setSaving(false);
+    }
+  };
+
+  const remove=async item=>{
+    if(!canManage)return;
+    if(!window.confirm(`Delete "${item.title}"?`))return;
+
+    try{
+      await api(
+        `/api/applications/${item.id}`,
+        {method:"DELETE"},
+        token
+      );
+      setToast("Application deleted.");
+      if(editing===item.id)reset();
+      await reload();
+    }catch(error){
+      setMessage(error.message);
+    }
+  };
+
+  return <div className="page-stack">
+    <SectionHead
+      kicker={canManage?"LEADERSHIP APPLICATION CONTROL":"APPLICATION CENTER"}
+      title="Applications."
+      text={
+        canManage
+          ? "Create, open, close, and edit Bay Café applications directly from the website."
+          : "View the applications currently configured by Bay Café Leadership and Ownership."
+      }
+      right={
+        canManage
+          ? <Badge tone="green">MANAGEMENT ENABLED</Badge>
+          : <Badge>VIEW ONLY</Badge>
+      }
+    />
+
+    {canManage&&
+      <form className="application-editor" onSubmit={save}>
+        <div className="application-editor-head">
+          <div>
+            <span className="eyebrow">{editing?"EDIT APPLICATION":"NEW APPLICATION"}</span>
+            <h2>{editing?"Update application":"Create an application"}</h2>
+          </div>
+          {editing&&
+            <button type="button" className="secondary-btn" onClick={reset}>
+              Cancel
+            </button>
+          }
+        </div>
+
+        <label>
+          Application title
+          <input
+            value={title}
+            onChange={event=>setTitle(event.target.value)}
+            placeholder="Management Application"
+            maxLength={100}
+            required
+          />
+        </label>
+
+        <label>
+          Description
+          <textarea
+            value={description}
+            onChange={event=>setDescription(event.target.value)}
+            placeholder="Explain who should apply and what this application is for."
+            rows={5}
+          />
+        </label>
+
+        <div className="application-form-grid">
+          <label>
+            Status
+            <select value={status} onChange={event=>setStatus(event.target.value)}>
+              <option value="open">Open</option>
+              <option value="closed">Closed</option>
+            </select>
+          </label>
+
+          <label>
+            Questions
+            <textarea
+              value={questions}
+              onChange={event=>setQuestions(event.target.value)}
+              placeholder={"Why do you want this role?\nWhat experience do you have?\nWhat is your timezone?"}
+              rows={8}
+            />
+            <small>One question per line.</small>
+          </label>
+        </div>
+
+        <div className="button-row">
+          <button className="primary-btn" disabled={saving}>
+            {saving
+              ? "Saving..."
+              : editing
+                ? "Save Changes"
+                : "Create Application"
+            }
+          </button>
+
+          {message&&<span className="form-message">{message}</span>}
+        </div>
+      </form>
+    }
+
+    <div className="applications-grid">
+      {items.length
+        ? items.map(item=>
+          <article className="application-card" key={item.id}>
+            <div className="application-card-head">
+              <div>
+                <Badge tone={item.status==="open"?"green":"sand"}>
+                  {String(item.status||"closed").toUpperCase()}
+                </Badge>
+                <h3>{item.title}</h3>
+              </div>
+              {canManage&&
+                <div className="application-actions">
+                  <button onClick={()=>beginEdit(item)} title="Edit application">
+                    <FilePenLine size={15}/>
+                  </button>
+                  <button onClick={()=>remove(item)} title="Delete application">
+                    <Trash2 size={15}/>
+                  </button>
+                </div>
+              }
+            </div>
+
+            {item.description&&<p>{item.description}</p>}
+
+            <div className="application-questions">
+              <span>QUESTIONS</span>
+              {(item.questions||[]).length
+                ? <ol>
+                    {item.questions.map((question,index)=>
+                      <li key={index}>{question}</li>
+                    )}
+                  </ol>
+                : <p>No questions added yet.</p>
+              }
+            </div>
+
+            <div className="application-meta">
+              <span>Updated {formatDate(item.updatedAt||item.createdAt)}</span>
+              {item.updatedBy&&<span>by @{item.updatedBy}</span>}
+            </div>
+          </article>
+        )
+        : <Empty
+            icon={FilePenLine}
+            title="No applications yet"
+            text={
+              canManage
+                ? "Create the first Bay Café application above."
+                : "Leadership has not published any applications yet."
+            }
+          />
+      }
+    </div>
+  </div>;
+}
+
 function InformationHub({user}){const mg=user.capabilities?.managementInfo,gov=user.capabilities?.governanceInfo;return <div className="page-stack"><SectionHead kicker="ROLE-AWARE RESOURCE CENTER" title="Information Hub." text="Bay Café guidance and server resources automatically unlock based on your rank."/><section className="info-hero"><div><Badge>SIP. RELAX. ENJOY THE BAY.</Badge><h2>Your staff guide,<em>all in one shoreline.</em></h2><p>Read your team expectations, find internal servers, and review leadership standards without digging through old Discord messages.</p></div><a className="primary-btn inline" href="https://discord.gg/ztPy6UKxY" target="_blank" rel="noreferrer">Public Discord<ExternalLink size={14}/></a></section>{gov&&<section className="info-section"><SectionHead kicker="GOVERNANCE TEAM" title="Corporate information." text="Enhanced permissions come with enhanced responsibility."/><div className="welcome-note"><BriefcaseBusiness size={20}/><div><strong>Hey Governance Team!</strong><p>Congratulations on making it here. You still need to follow the team standards while using the enhanced permissions that come with your role. Before beginning your trial, review the information below and contact Leadership if anything is unclear.</p></div></div><div className="info-grid two"><InfoBlock title="Core Requirements"><ul><li><strong>13+ Years Old</strong> — meet the minimum age requirement set by Roblox and Discord.</li><li><strong>Professional Conduct</strong> — act respectfully, maturely, and professionally.</li><li><strong>Zero-Tolerance Policy</strong> — exploiting, hacking, raiding, leaking confidential information, or toxic behavior may result in removal.</li><li><strong>Account Security</strong> — 2FA must remain enabled on Roblox and Discord.</li></ul></InfoBlock><InfoBlock title="Leadership & Integrity"><ul><li>Lead by example and demonstrate the standard expected from staff.</li><li>Enforce rules fairly without favoritism or bias.</li><li>Take responsibility for your decisions and actions.</li><li>Ignoring violations, abusing permissions, exploiting, or bending rules for personal benefit may result in disciplinary action.</li></ul></InfoBlock><InfoBlock title="Staff Supervision & Conflict Management"><ul><li>Support staff growth with guidance and answers.</li><li>Handle corrections calmly, respectfully, and privately when possible.</li><li>Remain neutral during disputes and gather information before deciding.</li><li>Avoid public criticism, arguing, favoritism, or escalating conflicts.</li></ul></InfoBlock><InfoBlock title="Activity & Performance"><ul><li>Remain consistently active within Bay Café.</li><li>Attend required trainings, meetings, shifts, and events when requested.</li><li>Complete assigned responsibilities accurately and efficiently.</li><li>Maintain teamwork and strong customer service.</li></ul></InfoBlock><InfoBlock title="Communication Expectations"><ul><li>Use clear, respectful, professional language.</li><li>Maintain maturity with customers, staff, and Leadership.</li><li>Respond to Leadership requests within a reasonable timeframe.</li><li>Avoid arguing, spamming, trolling, and unnecessary drama.</li></ul></InfoBlock><article className="server-links-card"><span className="eyebrow">CORPORATE SERVERS</span><a href="https://discord.gg/SrMHvhmhMR" target="_blank" rel="noreferrer"><div className="link-icon"><Link2 size={17}/></div><div><strong>Corporate / Mentorship Hub</strong><span>Guidance, logging, leadership support, and corporate development.</span></div><ExternalLink size={15}/></a><a href="https://discord.gg/yvySDe3fVv" target="_blank" rel="noreferrer"><div className="link-icon"><Link2 size={17}/></div><div><strong>Public Relations Corporates</strong><span>PR Corporate coordination and resources.</span></div><ExternalLink size={15}/></a></article></div></section>}{mg&&<section className="info-section"><SectionHead kicker="MANAGEMENT TEAM" title="Management information." text="Leadership begins with consistency, professionalism, and strong judgment."/><div className="welcome-note management"><Sparkles size={20}/><div><strong>Welcome to Management!</strong><p>Your hard work, dedication, and professionalism earned this position. Management members are expected to set an example through maturity, professionalism, and strong leadership at all times.</p></div></div><div className="info-grid two"><InfoBlock title="Activity Requirements"><p>Junior Directors, Senior Directors, and Head Directors must choose one weekly activity option:</p><ul><li>1 hour of in-game activity + 10 minutes of server activity (coming soon)</li><li>OR 2 hours of in-game activity + 5 minutes of server activity</li></ul><p>Bay Café is still under development, so some systems may not track activity automatically yet. Requirement changes will be announced as systems are updated.</p></InfoBlock><InfoBlock title="Support & Questions"><p>Use the support system for exploiter reports, general support inquiries, Management questions, and resignation requests.</p><p>Resignations should be handled privately and should not be publicly announced.</p></InfoBlock><InfoBlock title="Permissions & Responsibilities"><p>Management members have access to special in-game administrative commands used to assist staff and keep the environment professional.</p><p>Admin permissions are a privilege. Abuse, misuse, favoritism, or inappropriate use may result in disciplinary action, demotion, or removal.</p></InfoBlock><InfoBlock title="Final Notes"><p>Management members are role models for the community. Remain active, professional, respectful, and committed to helping Bay Café grow.</p></InfoBlock><article className="server-links-card single"><span className="eyebrow">MANAGEMENT SERVER</span><a href="https://discord.gg/SrMHvhmhMR" target="_blank" rel="noreferrer"><div className="link-icon"><Link2 size={17}/></div><div><strong>Bay Café Management Hub</strong><span>Management communication, guidance, and internal resources.</span></div><ExternalLink size={15}/></a></article></div></section>}{!mg&&<section className="locked-info"><ShieldCheck size={22}/><div><strong>Staff information is ready.</strong><p>Management and Governance resources automatically appear here if your Bay Café rank reaches those teams.</p></div></section>}</div>;}
 
 function Profiles({

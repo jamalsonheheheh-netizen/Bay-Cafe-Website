@@ -14,6 +14,7 @@ const DISCORD_BOT_TOKEN = String(process.env.DISCORD_BOT_TOKEN || "").trim();
 const DISCORD_GUILD_ID = String(process.env.DISCORD_GUILD_ID || "1446083660351799381").trim();
 const DISCORD_TICKET_CHANNEL_ID = String(process.env.DISCORD_TICKET_CHANNEL_ID || "").trim();
 const DISCORD_SUPPORT_ROLE_ID = String(process.env.DISCORD_SUPPORT_ROLE_ID || "").trim();
+const DISCORD_ANNOUNCEMENT_CHANNEL_ID = String(process.env.DISCORD_ANNOUNCEMENT_CHANNEL_ID || "1446415574682046495").trim();
 const TRACK_CHANNEL_IDS = new Set(String(process.env.DISCORD_TRACK_CHANNEL_IDS || "").split(",").map(v=>v.trim()).filter(Boolean));
 const EXCLUDED_CHANNEL_IDS = new Set(String(process.env.DISCORD_EXCLUDED_CHANNEL_IDS || "").split(",").map(v=>v.trim()).filter(Boolean));
 const ALLOWED_ORIGINS = String(process.env.FRONTEND_URLS || process.env.FRONTEND_URL || "http://localhost:5173").split(",").map(v=>v.trim().replace(/\/$/,"")).filter(Boolean);
@@ -22,7 +23,7 @@ app.use(cors({origin(origin,cb){if(!origin)return cb(null,true);const clean=orig
 app.use(express.json({limit:"1mb"}));
 fs.mkdirSync(DATA_DIRECTORY,{recursive:true});
 
-const FILES={discordMessages:path.join(DATA_DIRECTORY,"discord-messages.json"),tickets:path.join(DATA_DIRECTORY,"tickets.json")};
+const FILES={discordMessages:path.join(DATA_DIRECTORY,"discord-messages.json"),tickets:path.join(DATA_DIRECTORY,"tickets.json"),applications:path.join(DATA_DIRECTORY,"applications.json")};
 function readJson(file,fallback){try{if(!fs.existsSync(file))return fallback;const raw=fs.readFileSync(file,"utf8");return raw?JSON.parse(raw):fallback;}catch{return fallback;}}
 function writeJson(file,value){const temp=`${file}.tmp`;fs.writeFileSync(temp,JSON.stringify(value,null,2));fs.renameSync(temp,file);}
 const ROBLOX_CACHE = new Map();
@@ -506,6 +507,260 @@ app.get("/api/discord/channels",auth,(req,res)=>{
       (a,b)=>a.name.localeCompare(b.name)
     )
   });
+});
+
+
+function canManageApplications(user){
+  return Number(user?.level||0)>=4 ||
+    ["leadership","ownership"].includes(
+      String(user?.tier||"").toLowerCase()
+    );
+}
+
+function cleanQuestions(value){
+  const raw=Array.isArray(value)?value:String(value||"").split("\n");
+  return raw
+    .map(item=>String(item||"").trim())
+    .filter(Boolean)
+    .slice(0,30)
+    .map(item=>item.slice(0,250));
+}
+
+function publicApplication(item){
+  return {
+    id:item.id,
+    title:item.title,
+    description:item.description,
+    status:item.status,
+    questions:Array.isArray(item.questions)?item.questions:[],
+    createdAt:item.createdAt,
+    updatedAt:item.updatedAt,
+    createdBy:item.createdBy,
+    updatedBy:item.updatedBy
+  };
+}
+
+app.get("/api/applications",auth,(_req,res)=>{
+  const items=readJson(FILES.applications,[])
+    .sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt));
+
+  res.json({
+    success:true,
+    applications:items.map(publicApplication)
+  });
+});
+
+app.post("/api/applications",auth,(req,res)=>{
+  if(!canManageApplications(req.user)){
+    return res.status(403).json({
+      success:false,
+      message:"Leadership or Ownership access is required to manage applications."
+    });
+  }
+
+  const title=String(req.body.title||"").trim().slice(0,100);
+  const description=String(req.body.description||"").trim().slice(0,3000);
+  const status=String(req.body.status||"open").toLowerCase()==="closed"?"closed":"open";
+  const questions=cleanQuestions(req.body.questions);
+
+  if(title.length<3){
+    return res.status(400).json({
+      success:false,
+      message:"Application title must be at least 3 characters."
+    });
+  }
+
+  const now=new Date().toISOString();
+  const application={
+    id:crypto.randomUUID(),
+    title,
+    description,
+    status,
+    questions,
+    createdAt:now,
+    updatedAt:now,
+    createdBy:req.user.username,
+    updatedBy:req.user.username
+  };
+
+  const items=readJson(FILES.applications,[]);
+  items.unshift(application);
+  writeJson(FILES.applications,items);
+
+  broadcast("application:update",{
+    action:"created",
+    application:publicApplication(application)
+  });
+
+  res.status(201).json({
+    success:true,
+    application:publicApplication(application)
+  });
+});
+
+app.put("/api/applications/:id",auth,(req,res)=>{
+  if(!canManageApplications(req.user)){
+    return res.status(403).json({
+      success:false,
+      message:"Leadership or Ownership access is required to manage applications."
+    });
+  }
+
+  const items=readJson(FILES.applications,[]);
+  const index=items.findIndex(item=>String(item.id)===String(req.params.id));
+
+  if(index<0){
+    return res.status(404).json({
+      success:false,
+      message:"Application not found."
+    });
+  }
+
+  const current=items[index];
+  const title=String(req.body.title??current.title).trim().slice(0,100);
+  const description=String(req.body.description??current.description).trim().slice(0,3000);
+  const status=String(req.body.status??current.status).toLowerCase()==="closed"?"closed":"open";
+  const questions=req.body.questions===undefined
+    ? current.questions
+    : cleanQuestions(req.body.questions);
+
+  if(title.length<3){
+    return res.status(400).json({
+      success:false,
+      message:"Application title must be at least 3 characters."
+    });
+  }
+
+  const application={
+    ...current,
+    title,
+    description,
+    status,
+    questions,
+    updatedAt:new Date().toISOString(),
+    updatedBy:req.user.username
+  };
+
+  items[index]=application;
+  writeJson(FILES.applications,items);
+
+  broadcast("application:update",{
+    action:"updated",
+    application:publicApplication(application)
+  });
+
+  res.json({
+    success:true,
+    application:publicApplication(application)
+  });
+});
+
+app.delete("/api/applications/:id",auth,(req,res)=>{
+  if(!canManageApplications(req.user)){
+    return res.status(403).json({
+      success:false,
+      message:"Leadership or Ownership access is required to manage applications."
+    });
+  }
+
+  const items=readJson(FILES.applications,[]);
+  const application=items.find(item=>String(item.id)===String(req.params.id));
+
+  if(!application){
+    return res.status(404).json({
+      success:false,
+      message:"Application not found."
+    });
+  }
+
+  writeJson(
+    FILES.applications,
+    items.filter(item=>String(item.id)!==String(req.params.id))
+  );
+
+  broadcast("application:update",{
+    action:"deleted",
+    application:{id:application.id}
+  });
+
+  res.json({success:true});
+});
+
+function announcementRecord(message){
+  const embeds=[...message.embeds.values()].map(embed=>({
+    title:embed.title||"",
+    description:embed.description||"",
+    url:embed.url||"",
+    fields:(embed.fields||[]).map(field=>({
+      name:field.name||"",
+      value:field.value||""
+    }))
+  }));
+
+  return {
+    id:message.id,
+    channelId:message.channelId,
+    channelName:message.channel?.name||"announcements",
+    content:message.content||"",
+    authorId:message.author?.id||"",
+    authorName:
+      message.member?.displayName||
+      message.author?.globalName||
+      message.author?.username||
+      "Bay Café",
+    authorUsername:message.author?.username||"",
+    authorAvatar:message.author?.displayAvatarURL?.({size:128})||"",
+    createdAt:message.createdAt?.toISOString?.()||new Date().toISOString(),
+    url:message.url||"",
+    attachments:[...message.attachments.values()].map(item=>({
+      id:item.id,
+      name:item.name,
+      url:item.url,
+      contentType:item.contentType||""
+    })),
+    embeds
+  };
+}
+
+app.get("/api/announcements",auth,async(_req,res)=>{
+  try{
+    if(!discordClient?.isReady()){
+      return res.json({
+        success:true,
+        channelId:DISCORD_ANNOUNCEMENT_CHANNEL_ID,
+        announcements:[]
+      });
+    }
+
+    const channel=await discordClient.channels
+      .fetch(DISCORD_ANNOUNCEMENT_CHANNEL_ID)
+      .catch(()=>null);
+
+    if(!channel?.isTextBased?.()||!channel?.messages?.fetch){
+      return res.status(404).json({
+        success:false,
+        message:"Bay Café announcement channel could not be accessed by the bot."
+      });
+    }
+
+    const messages=await channel.messages.fetch({limit:50});
+
+    const announcements=[...messages.values()]
+      .sort((a,b)=>b.createdTimestamp-a.createdTimestamp)
+      .map(announcementRecord);
+
+    res.json({
+      success:true,
+      channelId:DISCORD_ANNOUNCEMENT_CHANNEL_ID,
+      channelName:channel.name||"announcements",
+      announcements
+    });
+  }catch(error){
+    res.status(400).json({
+      success:false,
+      message:error.message||"Unable to load announcements."
+    });
+  }
 });
 
 function publicTicket(ticket){return {...ticket,messages:Array.isArray(ticket.messages)?ticket.messages:[]};}
