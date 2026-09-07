@@ -185,8 +185,10 @@ function hierarchyFor(roleName="",rank=0){
   ];
 
   const directing=[
-    "directing team",
-    "directing"
+    "staff assistant",
+    "general manager",
+    "assistant manager",
+    "supervisor"
   ];
 
   let tier="community";
