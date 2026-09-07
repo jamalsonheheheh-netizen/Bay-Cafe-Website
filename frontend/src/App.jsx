@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {Activity,ArrowRight,Bell,BookOpen,BriefcaseBusiness,CheckCircle2,ChevronRight,Coffee,ExternalLink,FilePenLine,LifeBuoy,Link2,LogOut,Megaphone,Menu,MessageCircleMore,Plus,Search,ShieldCheck,Sparkles,Ticket,Trash2,UserRoundSearch,Users,Waves,X} from "lucide-react";
+import {Activity,Archive,ArrowRight,Bell,BookOpen,BriefcaseBusiness,CheckCircle2,ChevronRight,Coffee,ExternalLink,FilePenLine,Gauge,LifeBuoy,Link2,LogOut,Megaphone,Menu,MessageCircleMore,Plus,Search,ShieldCheck,Sparkles,Ticket,Trash2,UserRoundSearch,Users,Waves,X} from "lucide-react";
 
 const IS_LOCAL =
   ["localhost", "127.0.0.1"].includes(
@@ -540,10 +540,11 @@ function Dashboard({token,user,onLogout}){
     {id:"discord",label:"Community Activity",icon:MessageCircleMore,show:caps.discord},
     {id:"careers",label:"Careers",icon:BriefcaseBusiness,show:true},
     {id:"applications",label:"Applications",icon:FilePenLine,show:canManageApplications},
+    {id:"activityAdmin",label:"Activity Management",icon:Gauge,show:canManageApplications},
     {id:"information",label:"Information",icon:BookOpen,show:true},
     {id:"profiles",label:"Profiles",icon:UserRoundSearch,show:caps.profiles},
     {id:"tickets",label:"Support",icon:LifeBuoy,show:caps.tickets}
-  ].filter(item=>item.show),[caps]);
+  ].filter(item=>item.show),[caps,canManageApplications]);
 
   async function loadStats(){
     setStats(await api("/api/stats",{},token));
@@ -1214,14 +1215,58 @@ function ApplicationsPage({token,user,items,canManage,submissions,reload,setToas
   const[questions,setQuestions]=useState("");
   const[saving,setSaving]=useState(false);
   const[message,setMessage]=useState("");
+  const draftKey=`bay.cafe.applicationDraft.${user?.id||user?.username||"staff"}`;
 
-  const reset=()=>{
+  useEffect(()=>{
+    try{
+      const saved=JSON.parse(localStorage.getItem(draftKey)||"null");
+      if(!saved)return;
+      setEditing(saved.editing||null);
+      setTitle(saved.title||"");
+      setDescription(saved.description||"");
+      setStatus(saved.status||"open");
+      setQuestions(saved.questions||"");
+    }catch{}
+  },[draftKey]);
+
+  useEffect(()=>{
+    try{
+      const hasDraft=
+        Boolean(editing)||
+        Boolean(title.trim())||
+        Boolean(description.trim())||
+        Boolean(questions.trim())||
+        status!=="open";
+
+      if(!hasDraft){
+        localStorage.removeItem(draftKey);
+        return;
+      }
+
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          editing,
+          title,
+          description,
+          status,
+          questions,
+          savedAt:Date.now()
+        })
+      );
+    }catch{}
+  },[draftKey,editing,title,description,status,questions]);
+
+  const reset=(clearSavedDraft=true)=>{
     setEditing(null);
     setTitle("");
     setDescription("");
     setStatus("open");
     setQuestions("");
     setMessage("");
+    if(clearSavedDraft){
+      try{localStorage.removeItem(draftKey)}catch{}
+    }
   };
 
   const beginEdit=item=>{
@@ -1309,6 +1354,7 @@ function ApplicationsPage({token,user,items,canManage,submissions,reload,setToas
           <div>
             <span className="eyebrow">{editing?"EDIT APPLICATION":"NEW APPLICATION"}</span>
             <h2>{editing?"Update application":"Create an application"}</h2>
+            <small className="draft-saved-note">Draft auto-saves on this device.</small>
           </div>
           {editing&&
             <button type="button" className="secondary-btn" onClick={reset}>
