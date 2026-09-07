@@ -147,17 +147,18 @@ function hierarchyFor(roleName="",rank=0){
   const numericRank=Number(rank)||0;
 
   const ownership=[
-    "ownership",
-    "owner",
-    "founder",
-    "chairman",
     "chairwoman",
+    "chairman",
+    "vice-chairman",
     "vice chairman",
+    "vice-chairwoman",
     "vice chairwoman",
-    "president",
-    "vice president",
+    "ownership team",
+    "lead coordinator",
+    "coordinator",
+    "administration lead",
     "chief administrative officer",
-    "cao"
+    "developing officer"
   ];
 
   const leadership=[
