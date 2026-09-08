@@ -9,7 +9,11 @@ import { Client, GatewayIntentBits, Partials, EmbedBuilder } from "discord.js";
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
 const GROUP_ID = String(process.env.ROBLOX_GROUP_ID || "695410048").trim();
-const DATA_DIRECTORY = path.resolve(process.env.DATA_DIRECTORY || "./data");
+const IS_RAILWAY=Boolean(process.env.RAILWAY_ENVIRONMENT||process.env.RAILWAY_PROJECT_ID||process.env.RAILWAY_SERVICE_ID);
+const DATA_DIRECTORY=path.resolve(
+  process.env.DATA_DIRECTORY ||
+  (IS_RAILWAY?"/data/bay-cafe":"./data")
+);
 const DISCORD_BOT_TOKEN = String(process.env.DISCORD_BOT_TOKEN || "").trim();
 const DISCORD_GUILD_ID = String(process.env.DISCORD_GUILD_ID || "1446083660351799381").trim();
 const DISCORD_TICKET_CHANNEL_ID = String(process.env.DISCORD_TICKET_CHANNEL_ID || "").trim();
@@ -25,7 +29,80 @@ fs.mkdirSync(DATA_DIRECTORY,{recursive:true});
 
 const FILES={discordMessages:path.join(DATA_DIRECTORY,"discord-messages.json"),tickets:path.join(DATA_DIRECTORY,"tickets.json"),applications:path.join(DATA_DIRECTORY,"applications.json"),applicationSubmissions:path.join(DATA_DIRECTORY,"application-submissions.json"),activitySettings:path.join(DATA_DIRECTORY,"activity-settings.json"),activityArchive:path.join(DATA_DIRECTORY,"activity-archive.json")};
 function readJson(file,fallback){try{if(!fs.existsSync(file))return fallback;const raw=fs.readFileSync(file,"utf8");return raw?JSON.parse(raw):fallback;}catch{return fallback;}}
-function writeJson(file,value){const temp=`${file}.tmp`;fs.writeFileSync(temp,JSON.stringify(value,null,2));fs.renameSync(temp,file);}
+function writeJson(file,value){const temp=`${file}.tmp`;fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(temp,JSON.stringify(value,null,2));fs.renameSync(temp,file);}
+
+const APPLICATION_BACKUP_DIRECTORY=path.join(DATA_DIRECTORY,"application-backups");
+fs.mkdirSync(APPLICATION_BACKUP_DIRECTORY,{recursive:true});
+
+function validApplicationArray(value){
+  return Array.isArray(value)&&value.every(item=>item&&typeof item==="object"&&item.id&&item.title);
+}
+
+function applicationBackupFiles(){
+  try{
+    return fs.readdirSync(APPLICATION_BACKUP_DIRECTORY)
+      .filter(name=>name.endsWith(".json"))
+      .map(name=>path.join(APPLICATION_BACKUP_DIRECTORY,name))
+      .sort((a,b)=>fs.statSync(b).mtimeMs-fs.statSync(a).mtimeMs);
+  }catch{
+    return [];
+  }
+}
+
+function backupApplications(items,reason="update"){
+  if(!validApplicationArray(items))return;
+
+  const safeReason=String(reason||"update").replace(/[^a-z0-9_-]/gi,"-").slice(0,40);
+  const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+  const file=path.join(APPLICATION_BACKUP_DIRECTORY,`${stamp}-${safeReason}.json`);
+
+  writeJson(file,items);
+
+  const backups=applicationBackupFiles();
+  for(const oldFile of backups.slice(25)){
+    try{fs.unlinkSync(oldFile)}catch{}
+  }
+}
+
+function readApplications(){
+  try{
+    if(fs.existsSync(FILES.applications)){
+      const raw=fs.readFileSync(FILES.applications,"utf8");
+      const parsed=raw?JSON.parse(raw):[];
+      if(validApplicationArray(parsed))return parsed;
+      if(Array.isArray(parsed)&&parsed.length===0)return parsed;
+    }
+  }catch(error){
+    console.error(`[Bay Café] Primary applications file could not be read: ${error.message}`);
+  }
+
+  for(const backupFile of applicationBackupFiles()){
+    try{
+      const parsed=JSON.parse(fs.readFileSync(backupFile,"utf8"));
+      if(validApplicationArray(parsed)||Array.isArray(parsed)){
+        console.warn(`[Bay Café] Restoring applications from backup ${path.basename(backupFile)}`);
+        writeJson(FILES.applications,parsed);
+        return parsed;
+      }
+    }catch{}
+  }
+
+  return [];
+}
+
+function saveApplications(items,reason="update"){
+  if(!Array.isArray(items))throw new Error("Application storage expected an array.");
+
+  const current=readApplications();
+  if(current.length||fs.existsSync(FILES.applications)){
+    backupApplications(current,`before-${reason}`);
+  }
+
+  saveApplications(items,"create");
+  backupApplications(items,`after-${reason}`);
+  return items;
+}
+
 const ROBLOX_CACHE = new Map();
 
 function sleep(ms) {
@@ -703,7 +780,7 @@ app.get("/api/applications",auth,(req,res)=>{
     });
   }
 
-  const items=readJson(FILES.applications,[])
+  const items=readApplications()
     .sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt));
 
   res.json({
@@ -713,7 +790,7 @@ app.get("/api/applications",auth,(req,res)=>{
 });
 
 app.get("/api/careers",auth,(_req,res)=>{
-  const items=readJson(FILES.applications,[])
+  const items=readApplications()
     .filter(item=>String(item.status||"closed").toLowerCase()==="open")
     .sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt));
 
@@ -756,9 +833,9 @@ app.post("/api/applications",auth,(req,res)=>{
     updatedBy:req.user.username
   };
 
-  const items=readJson(FILES.applications,[]);
+  const items=readApplications();
   items.unshift(application);
-  writeJson(FILES.applications,items);
+  saveApplications(items,"update");
 
   broadcast("application:update",{
     action:"created",
@@ -779,7 +856,7 @@ app.put("/api/applications/:id",auth,(req,res)=>{
     });
   }
 
-  const items=readJson(FILES.applications,[]);
+  const items=readApplications();
   const index=items.findIndex(item=>String(item.id)===String(req.params.id));
 
   if(index<0){
@@ -836,7 +913,7 @@ app.delete("/api/applications/:id",auth,(req,res)=>{
     });
   }
 
-  const items=readJson(FILES.applications,[]);
+  const items=readApplications();
   const application=items.find(item=>String(item.id)===String(req.params.id));
 
   if(!application){
@@ -846,9 +923,9 @@ app.delete("/api/applications/:id",auth,(req,res)=>{
     });
   }
 
-  writeJson(
-    FILES.applications,
-    items.filter(item=>String(item.id)!==String(req.params.id))
+  saveApplications(
+    items.filter(item=>String(item.id)!==String(req.params.id)),
+    "delete"
   );
 
   broadcast("application:update",{
@@ -950,7 +1027,7 @@ function publicSubmission(item){
 }
 
 app.post("/api/careers/:id/apply",auth,(req,res)=>{
-  const applications=readJson(FILES.applications,[]);
+  const applications=readApplications();
   const application=applications.find(item=>String(item.id)===String(req.params.id));
 
   if(!application){
@@ -1039,6 +1116,25 @@ async function startDiscord(){if(!DISCORD_BOT_TOKEN){console.warn("[Bay Café] D
       }`
     );await backfillDiscord().catch(e=>console.error(`[Bay Café] Discord backfill failed: ${e.message}`));});discordClient.on("messageCreate",async message=>{if(!message.guildId)return;const guild=await trackedGuild();if(guild&&message.guildId!==guild.id)return;const tickets=readJson(FILES.tickets,[]),ticket=tickets.find(x=>x.status==="open"&&String(x.discordThreadId||"")===String(message.channelId));if(ticket&&message.channel?.isThread?.()&&!message.author?.bot){const content=String(message.content||"").trim(),attachmentText=message.attachments?.size?[...message.attachments.values()].map(x=>x.url).join("\n"):"",merged=[content,attachmentText].filter(Boolean).join("\n").slice(0,1800);if(merged){ticket.messages??=[];ticket.messages.push({id:`discord-${message.id}`,authorType:"staff",authorId:message.author.id,authorDisplayName:message.member?.displayName||message.author.globalName||message.author.username,authorUsername:message.author.username,content:merged,createdAt:message.createdAt.toISOString(),source:"discord"});ticket.updatedAt=new Date().toISOString();writeJson(FILES.tickets,tickets);broadcast("ticket:update",publicTicket(ticket));}return;}await persistDiscordMessage(message).catch(e=>console.error(`[Bay Café] Discord message tracking failed: ${e.message}`));});discordClient.on("messageUpdate",async(_old,newMessage)=>{const full=newMessage.partial?await newMessage.fetch().catch(()=>null):newMessage;if(full)await persistDiscordMessage(full).catch(()=>null);});discordClient.on("messageDelete",async message=>removeDiscordMessage(message.id));await discordClient.login(DISCORD_BOT_TOKEN);}
 
-app.get("/api/health",(_req,res)=>res.json({success:true,service:"Bay Café Staff Workspace",groupId:GROUP_ID,discord:Boolean(discordClient?.isReady()),trackedMessages:readJson(FILES.discordMessages,[]).length}));
+app.get("/api/health",(_req,res)=>res.json({
+  success:true,
+  service:"Bay Café Staff Workspace",
+  groupId:GROUP_ID,
+  discord:Boolean(discordClient?.isReady()),
+  trackedMessages:readJson(FILES.discordMessages,[]).length,
+  storage:{
+    directory:DATA_DIRECTORY,
+    railway:IS_RAILWAY,
+    expectedPersistentMount:IS_RAILWAY?DATA_DIRECTORY.startsWith("/data"):null,
+    applications:readApplications().length,
+    applicationBackups:applicationBackupFiles().length
+  }
+}));
+console.log(`[Bay Café] Data directory: ${DATA_DIRECTORY}`);
+if(IS_RAILWAY&&!DATA_DIRECTORY.startsWith("/data")){
+  console.warn("[Bay Café] WARNING: Railway storage is not under /data. Persistent data may reset after deploys.");
+}
+console.log(`[Bay Café] Applications loaded: ${readApplications().length}; backups: ${applicationBackupFiles().length}`);
+
 app.listen(PORT,()=>console.log(`[Bay Café] API listening on port ${PORT}`));
 startDiscord().catch(error=>console.error(`[Bay Café] Discord startup failed: ${error.message}`));
