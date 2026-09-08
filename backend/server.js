@@ -817,10 +817,10 @@ app.post("/api/applications",auth,(req,res)=>{
   const status=String(req.body.status||"open").toLowerCase()==="closed"?"closed":"open";
   const questions=cleanQuestions(req.body.questions);
 
-  if(title.length<3){
+  if(!title){
     return res.status(400).json({
       success:false,
-      message:"Application title must be at least 3 characters."
+      message:"Enter an application title."
     });
   }
 
@@ -878,10 +878,10 @@ app.put("/api/applications/:id",auth,(req,res)=>{
     ? current.questions
     : cleanQuestions(req.body.questions);
 
-  if(title.length<3){
+  if(!title){
     return res.status(400).json({
       success:false,
-      message:"Application title must be at least 3 characters."
+      message:"Enter an application title."
     });
   }
 
@@ -896,7 +896,7 @@ app.put("/api/applications/:id",auth,(req,res)=>{
   };
 
   items[index]=application;
-  writeJson(FILES.applications,items);
+  saveApplications(items,"edit");
 
   broadcast("application:update",{
     action:"updated",
