@@ -1030,3 +1030,22 @@
   max-width:520px;
   line-height:1.45;
 }
+
+/* V32 */
+.birthday-announcement{display:flex;align-items:center;gap:16px;padding:20px 22px;border:1px solid rgba(244,202,117,.24);border-radius:18px;background:linear-gradient(145deg,rgba(50,62,55,.82),rgba(7,37,46,.88))}
+.birthday-announcement.large{padding:28px}.birthday-icon{width:52px;height:52px;border-radius:15px;display:grid;place-items:center;flex-shrink:0;background:rgba(244,202,117,.12);color:#f0cf87;border:1px solid rgba(244,202,117,.16)}
+.birthday-announcement h2{margin:5px 0 0;font-size:22px}.birthday-announcement p{margin:6px 0 0;color:var(--muted);font-size:10px;line-height:1.6}
+.community-quick-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}.community-quick-grid article{padding:17px;border:1px solid var(--line);border-radius:16px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;background:rgba(7,38,50,.72)}
+.community-quick-grid article>svg{color:#80d7e8}.community-quick-grid strong,.community-quick-grid span{display:block}.community-quick-grid strong{font-size:10px}.community-quick-grid span{margin-top:4px;color:var(--muted);font-size:8px;line-height:1.45}
+.community-quick-grid button{grid-column:1/-1;min-height:34px;border:1px solid var(--line);border-radius:9px;background:rgba(100,213,234,.05);color:#bde9f1;font-size:8px;font-weight:800}
+.birthday-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}.birthday-card{padding:18px;border:1px solid var(--line);border-radius:16px;background:rgba(7,38,50,.72)}
+.birthday-card h3{margin:12px 0 0;font-size:15px}.birthday-card>span{display:block;margin-top:4px;color:#80a7b0;font-size:8px}.birthday-card>p{margin:10px 0 0;color:var(--muted);font-size:9px;line-height:1.55}
+.birthday-date{display:flex;align-items:center;gap:7px;color:#f0cf87}.birthday-date strong{font-size:9px}
+.rank-requirement-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}.rank-requirement-grid label{padding:12px;border:1px solid var(--line);border-radius:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(255,255,255,.022)}
+.rank-requirement-grid strong,.rank-requirement-grid span{display:block}.rank-requirement-grid strong{font-size:11px}.rank-requirement-grid span{margin-top:3px;color:var(--muted);font-size:7px}.rank-requirement-grid input{width:72px;min-height:36px;padding:0 8px;border:1px solid var(--line);border-radius:9px;background:rgba(3,23,32,.72);color:#fff}
+.activity-admin-grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.birthday-admin-form{padding:20px;border:1px solid var(--line);border-radius:18px;background:rgba(7,38,50,.76)}.birthday-admin-form h2{margin:7px 0 0;font-size:20px}.birthday-admin-form p{margin:7px 0 16px;color:var(--muted);font-size:9px;line-height:1.6}
+.birthday-form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.birthday-admin-form label{display:block;margin-bottom:12px}.birthday-admin-form label>span{display:block;margin-bottom:6px;color:#7ca5ae;font-size:7px;font-weight:800;letter-spacing:.09em}.birthday-admin-form input{width:100%;min-height:40px;padding:0 11px;border:1px solid var(--line);border-radius:10px;background:rgba(3,23,32,.72);color:#fff}
+.birthday-admin-list{display:grid;gap:10px}.birthday-admin-list article{padding:14px 16px;border:1px solid var(--line);border-radius:13px;display:grid;grid-template-columns:110px minmax(0,1fr) auto;align-items:center;gap:12px;background:rgba(7,38,50,.64)}
+.birthday-admin-list article>div:nth-child(2) strong,.birthday-admin-list article>div:nth-child(2) span{display:block}.birthday-admin-list article>div:nth-child(2) strong{font-size:10px}.birthday-admin-list article>div:nth-child(2) span{margin-top:3px;color:var(--muted);font-size:8px}
+@media(max-width:900px){.community-quick-grid,.birthday-grid,.rank-requirement-grid,.birthday-form-grid,.activity-admin-grid.two{grid-template-columns:1fr}.birthday-admin-list article{grid-template-columns:1fr}}

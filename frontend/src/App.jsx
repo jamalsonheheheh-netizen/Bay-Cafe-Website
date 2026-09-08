@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {Activity,Archive,ArrowRight,Bell,BookOpen,BriefcaseBusiness,CheckCircle2,ChevronRight,Coffee,ExternalLink,FilePenLine,Gauge,LifeBuoy,Link2,LogOut,Megaphone,Menu,MessageCircleMore,Plus,Search,ShieldCheck,Sparkles,Ticket,Trash2,UserRoundSearch,Users,Waves,X} from "lucide-react";
+import {Activity,Archive,ArrowRight,Bell,BookOpen,BriefcaseBusiness,Cake,CheckCircle2,ChevronRight,Coffee,ExternalLink,FilePenLine,Gauge,Gift,LifeBuoy,Link2,LogOut,Megaphone,Menu,MessageCircleMore,Plus,Search,ShieldCheck,Sparkles,Ticket,Trash2,UserRoundSearch,Users,Waves,X} from "lucide-react";
 
 const IS_LOCAL =
   ["localhost", "127.0.0.1"].includes(
@@ -335,6 +335,8 @@ function CommunityDashboard({onStaffLogin}){
   const[page,setPage]=useState("home");
   const[announcements,setAnnouncements]=useState([]);
   const[careers,setCareers]=useState([]);
+  const[birthdays,setBirthdays]=useState([]);
+  const[todayBirthdays,setTodayBirthdays]=useState([]);
 
   const loadAnnouncements=async()=>{
     const result=await api("/api/announcements");
@@ -345,14 +347,21 @@ function CommunityDashboard({onStaffLogin}){
     const result=await api("/api/careers");
     setCareers(result.careers||[]);
   };
+  const loadBirthdays=async()=>{
+    const result=await api("/api/birthdays");
+    setBirthdays(result.birthdays||[]);
+    setTodayBirthdays(result.todayBirthdays||[]);
+  };
 
   useEffect(()=>{
     loadAnnouncements().catch(()=>{});
     loadCareers().catch(()=>{});
+    loadBirthdays().catch(()=>{});
 
     const interval=setInterval(()=>{
       loadAnnouncements().catch(()=>{});
       loadCareers().catch(()=>{});
+      loadBirthdays().catch(()=>{});
     },15000);
 
     return()=>clearInterval(interval);
@@ -362,6 +371,7 @@ function CommunityDashboard({onStaffLogin}){
     {id:"home",label:"Community",icon:Waves},
     {id:"announcements",label:"Announcements",icon:Megaphone},
     {id:"careers",label:"Careers",icon:BriefcaseBusiness},
+    {id:"birthdays",label:"Birthdays",icon:Cake},
     {id:"about",label:"About Bay Café",icon:Coffee}
   ];
 
@@ -416,6 +426,23 @@ function CommunityDashboard({onStaffLogin}){
                 Announcements<Megaphone size={14}/>
               </button>
             </div>
+          </section>
+
+          {todayBirthdays.length>0&&
+            <section className="birthday-announcement">
+              <div className="birthday-icon"><Gift size={22}/></div>
+              <div>
+                <span className="eyebrow">TODAY AT THE BAY</span>
+                <h2>Happy Birthday!</h2>
+                <p>{todayBirthdays.map(item=>item.name).join(", ")} {todayBirthdays.length===1?"is":"are"} celebrating today. 🎉</p>
+              </div>
+            </section>
+          }
+
+          <section className="community-quick-grid">
+            <article><Megaphone size={18}/><div><strong>Official Updates</strong><span>Read the newest Bay Café announcements.</span></div><button onClick={()=>setPage("announcements")}>View</button></article>
+            <article><BriefcaseBusiness size={18}/><div><strong>Join the Team</strong><span>Explore Corporate, Management, and Directing applications.</span></div><button onClick={()=>setPage("careers")}>Explore</button></article>
+            <article><Cake size={18}/><div><strong>Birthdays</strong><span>Celebrate community members and upcoming birthdays.</span></div><button onClick={()=>setPage("birthdays")}>Celebrate</button></article>
           </section>
 
           <section>
@@ -526,6 +553,24 @@ function CommunityDashboard({onStaffLogin}){
         </div>
       }
 
+      {page==="birthdays"&&
+        <div className="page-stack">
+          <SectionHead kicker="COMMUNITY CELEBRATIONS" title="Birthdays at the Bay." text="Celebrate members of the Bay Café community." right={<Badge tone="green">{birthdays.length} LISTED</Badge>}/>
+          {todayBirthdays.length>0&&
+            <section className="birthday-announcement large">
+              <div className="birthday-icon"><Gift size={26}/></div>
+              <div><span className="eyebrow">BIRTHDAYS TODAY</span><h2>{todayBirthdays.map(item=>item.name).join(", ")}</h2><p>Wish them a happy birthday when you see them around the Bay! 🎂</p></div>
+            </section>
+          }
+          <div className="birthday-grid">
+            {birthdays.length
+              ? birthdays.map(item=><article className="birthday-card" key={item.id}><div className="birthday-date"><Cake size={17}/><strong>{item.date}</strong></div><h3>{item.name}</h3>{item.username&&<span>@{item.username}</span>}{item.note&&<p>{item.note}</p>}</article>)
+              : <Empty icon={Cake} title="No birthdays listed yet" text="Leadership and Ownership can add community birthdays from the staff hub."/>
+            }
+          </div>
+        </div>
+      }
+
       {page==="about"&&
         <div className="page-stack">
           <SectionHead
@@ -569,6 +614,7 @@ function Dashboard({token,user,onLogout}){
   const[applications,setApplications]=useState([]);
   const[careers,setCareers]=useState([]);
   const[submissions,setSubmissions]=useState([]);
+  const[birthdays,setBirthdays]=useState([]);
   const[toast,setToast]=useState("");
 
   const caps=user.capabilities||{};
@@ -587,6 +633,7 @@ function Dashboard({token,user,onLogout}){
     {id:"announcements",label:"Announcements",icon:Megaphone,show:true},
     {id:"discord",label:"Community Activity",icon:MessageCircleMore,show:caps.discord},
     {id:"activityAdmin",label:"Activity Management",icon:Gauge,show:hasLeadershipAccess},
+    {id:"communityAdmin",label:"Community Management",icon:Cake,show:hasLeadershipAccess},
     {id:"careers",label:"Careers",icon:BriefcaseBusiness,show:true},
     {id:"applications",label:"Applications",icon:FilePenLine,show:hasLeadershipAccess},
     {id:"information",label:"Information",icon:BookOpen,show:true},
@@ -696,6 +743,10 @@ function Dashboard({token,user,onLogout}){
     const result=await api("/api/application-submissions",{},token);
     setSubmissions(result.submissions||[]);
   }
+  async function loadBirthdays(){
+    const result=await api("/api/birthdays");
+    setBirthdays(result.birthdays||[]);
+  }
 
   useEffect(()=>{
     loadStats().catch(()=>{});
@@ -705,6 +756,7 @@ function Dashboard({token,user,onLogout}){
     loadCareers().catch(()=>{});
     loadApplications().catch(()=>{});
     loadSubmissions().catch(()=>{});
+    loadBirthdays().catch(()=>{});
 
     const interval=setInterval(()=>{
       loadStats().catch(()=>{});
@@ -714,6 +766,7 @@ function Dashboard({token,user,onLogout}){
       loadCareers().catch(()=>{});
       loadApplications().catch(()=>{});
       loadSubmissions().catch(()=>{});
+      loadBirthdays().catch(()=>{});
     },15000);
 
     return()=>clearInterval(interval);
@@ -777,6 +830,7 @@ function Dashboard({token,user,onLogout}){
     page==="careers"?"Careers":
     page==="applications"?"Applications":
     page==="activityAdmin"?"Activity Management":
+    page==="communityAdmin"?"Community Management":
     page==="information"?"Information Hub":
     page==="profiles"?"Profile Lookup":
     page==="tickets"?"Support Center":
@@ -886,6 +940,7 @@ function Dashboard({token,user,onLogout}){
         }
 
         {page==="activityAdmin"&&hasLeadershipAccess&&<ActivityAdminPage token={token} setToast={setToast}/>} 
+        {page==="communityAdmin"&&hasLeadershipAccess&&<CommunityAdminPage token={token} birthdays={birthdays} reloadBirthdays={loadBirthdays} setToast={setToast}/>} 
         {page==="information"&&<InformationHub user={user}/>} 
         {page==="profiles"&&<Profiles token={token}/>}
         {page==="tickets"&&
@@ -1663,7 +1718,108 @@ function ApplicationsPage({token,user,items,canManage,submissions,reload,setToas
   </div>;
 }
 
-function ActivityAdminPage({token,setToast}){const[data,setData]=useState(null),[requirement,setRequirement]=useState(0),[loading,setLoading]=useState(false);const load=async()=>{const r=await api("/api/activity/admin",{},token);setData(r);setRequirement(Number(r.settings?.weeklyRequirement)||0)};useEffect(()=>{load().catch(e=>setToast(e.message))},[token]);const save=async()=>{setLoading(true);try{await api("/api/activity/settings",{method:"PUT",body:JSON.stringify({weeklyRequirement:Number(requirement)||0})},token);setToast("Weekly requirement updated.");await load()}catch(e){setToast(e.message)}finally{setLoading(false)}};const rebuild=async()=>{setLoading(true);try{const r=await api("/api/activity/rebuild",{method:"POST"},token);setToast(`Activity rebuilt: ${r.messageCount||0} messages tracked.`);await load()}catch(e){setToast(e.message)}finally{setLoading(false)}};const reset=async()=>{if(!window.confirm("Reset this week's activity? A snapshot will be archived first."))return;setLoading(true);try{await api("/api/activity/reset",{method:"POST"},token);setToast("Current week reset.");await load()}catch(e){setToast(e.message)}finally{setLoading(false)}};if(!data)return <div className="notice">Loading activity management...</div>;return <div className="page-stack"><SectionHead kicker="LEADERSHIP / OWNERSHIP" title="Activity Management." text="Manage weekly activity tracking, requirements, rebuilds, resets, and archived snapshots." right={<Badge tone="green">PRIVATE</Badge>}/><div className="activity-admin-stats"><article><span>THIS WEEK</span><strong>{data.thisWeekTracked}</strong><small>tracked messages</small></article><article><span>TOTAL STORED</span><strong>{data.totalTracked}</strong><small>persistent records</small></article><article><span>REQUIREMENT</span><strong>{Number(data.settings?.weeklyRequirement)||0}</strong><small>messages this week</small></article></div><div className="activity-admin-grid"><article className="activity-admin-card"><h3>Weekly requirement</h3><p>Set the message requirement for the current week.</p><div className="requirement-row"><input type="number" min="0" max="10000" value={requirement} onChange={e=>setRequirement(e.target.value)}/><button className="primary-btn" onClick={save} disabled={loading}>Save</button></div></article><article className="activity-admin-card"><h3>Rebuild activity</h3><p>Re-scan up to 1,000 recent messages per tracked channel.</p><button className="primary-btn" onClick={rebuild} disabled={loading}>Rebuild Activity</button></article><article className="activity-admin-card danger"><h3>Reset current week</h3><p>Archive a snapshot, then clear this week's stored activity.</p><button className="secondary-btn" onClick={reset} disabled={loading}>Reset Week</button></article></div><SectionHead kicker="ARCHIVE" title="Recent snapshots." text="Manual reset snapshots are preserved here."/><div className="activity-archive-list">{(data.recentArchives||[]).length?data.recentArchives.map(item=><article key={item.id}><div><strong>{item.messageCount} messages</strong><span>{item.reason} • @{item.archivedBy}</span></div><span>{formatDate(item.archivedAt)}</span></article>):<Empty icon={Archive} title="No snapshots yet" text="Snapshots appear after a manual reset."/>}</div></div>;}
+function ActivityAdminPage({token,setToast}){
+  const[data,setData]=useState(null);
+  const[loading,setLoading]=useState(false);
+  const[requirements,setRequirements]=useState({});
+  const load=async()=>{const result=await api("/api/activity/admin",{},token);setData(result);setRequirements(result.settings?.rankRequirements||{});};
+  useEffect(()=>{load().catch(error=>setToast(error.message));},[token]);
+
+  const save=async()=>{
+    setLoading(true);
+    try{
+      await api("/api/activity/settings",{method:"PUT",body:JSON.stringify({weeklyRequirement:Number(data?.settings?.weeklyRequirement)||0,rankRequirements:requirements})},token);
+      setToast("Rank activity requirements updated.");
+      await load();
+    }catch(error){setToast(error.message)}finally{setLoading(false)}
+  };
+
+  const rebuild=async()=>{
+    setLoading(true);
+    try{const result=await api("/api/activity/rebuild",{method:"POST"},token);setToast(`Activity rebuilt: ${result.messageCount||0} messages tracked.`);await load()}
+    catch(error){setToast(error.message)}finally{setLoading(false)}
+  };
+
+  const reset=async()=>{
+    if(!window.confirm("Reset this week's activity? A snapshot will be archived first."))return;
+    setLoading(true);
+    try{await api("/api/activity/reset",{method:"POST"},token);setToast("Current week reset.");await load()}
+    catch(error){setToast(error.message)}finally{setLoading(false)}
+  };
+
+  if(!data)return <div className="notice">Loading activity management...</div>;
+
+  const fields=[
+    ["junior corporate","Junior Corporate","JC"],
+    ["senior corporate","Senior Corporate","SC"],
+    ["head corporate","Head Corporate","HC"],
+    ["junior director","Junior Director","JD"],
+    ["senior director","Senior Director","SD"],
+    ["head director","Head Director","HD"]
+  ];
+
+  return <div className="page-stack">
+    <SectionHead kicker="LEADERSHIP / OWNERSHIP" title="Activity Management." text="Manage weekly Discord requirements, rebuild tracking, reset the week, and review archived snapshots." right={<Badge tone="green">PRIVATE</Badge>}/>
+    <div className="activity-admin-stats">
+      <article><span>THIS WEEK</span><strong>{data.thisWeekTracked}</strong><small>tracked messages</small></article>
+      <article><span>TOTAL STORED</span><strong>{data.totalTracked}</strong><small>persistent records</small></article>
+      <article><span>RANK RULES</span><strong>6</strong><small>configured requirements</small></article>
+    </div>
+
+    <article className="activity-admin-card">
+      <span className="eyebrow">WEEKLY MESSAGE REQUIREMENTS</span>
+      <h3>Corporate & Management</h3>
+      <p>Requirements are applied automatically based on the member's Roblox group rank.</p>
+      <div className="rank-requirement-grid">
+        {fields.map(([key,label,short])=><label key={key}><div><strong>{short}</strong><span>{label}</span></div><input type="number" min="0" max="10000" value={requirements[key]??0} onChange={event=>setRequirements(current=>({...current,[key]:Number(event.target.value)||0}))}/></label>)}
+      </div>
+      <button className="primary-btn" onClick={save} disabled={loading}>Save Requirements</button>
+    </article>
+
+    <div className="activity-admin-grid two">
+      <article className="activity-admin-card"><h3>Rebuild activity</h3><p>Re-scan recent Discord history and rebuild stored records.</p><button className="primary-btn" onClick={rebuild} disabled={loading}>Rebuild Activity</button></article>
+      <article className="activity-admin-card danger"><h3>Reset current week</h3><p>Archive a snapshot first, then clear this week's activity.</p><button className="secondary-btn" onClick={reset} disabled={loading}>Reset Week</button></article>
+    </div>
+
+    <SectionHead kicker="ARCHIVE" title="Recent snapshots." text="Manual reset snapshots are preserved here."/>
+    <div className="activity-archive-list">{(data.recentArchives||[]).length?data.recentArchives.map(item=><article key={item.id}><div><strong>{item.messageCount} messages</strong><span>{item.reason} • @{item.archivedBy}</span></div><span>{formatDate(item.archivedAt)}</span></article>):<Empty icon={Archive} title="No snapshots yet" text="Snapshots appear after a manual reset."/>}</div>
+  </div>;
+}
+
+function CommunityAdminPage({token,birthdays,reloadBirthdays,setToast}){
+  const[name,setName]=useState(""),[username,setUsername]=useState(""),[date,setDate]=useState(""),[note,setNote]=useState(""),[saving,setSaving]=useState(false);
+
+  const submit=async event=>{
+    event.preventDefault();setSaving(true);
+    try{
+      await api("/api/birthdays",{method:"POST",body:JSON.stringify({name,username,date:date.slice(5),note})},token);
+      setName("");setUsername("");setDate("");setNote("");
+      setToast("Birthday added to the community page.");
+      await reloadBirthdays();
+    }catch(error){setToast(error.message)}finally{setSaving(false)}
+  };
+
+  const remove=async item=>{
+    if(!window.confirm(`Remove ${item.name}'s birthday?`))return;
+    try{await api(`/api/birthdays/${item.id}`,{method:"DELETE"},token);setToast("Birthday removed.");await reloadBirthdays()}
+    catch(error){setToast(error.message)}
+  };
+
+  return <div className="page-stack">
+    <SectionHead kicker="LEADERSHIP / OWNERSHIP" title="Community Management." text="Manage public community features such as birthday announcements." right={<Badge tone="green">PRIVATE</Badge>}/>
+    <form className="birthday-admin-form" onSubmit={submit}>
+      <div><span className="eyebrow">ADD BIRTHDAY</span><h2>Community birthday</h2><p>Birthdays appear publicly and automatically get a celebration banner on the correct day.</p></div>
+      <div className="birthday-form-grid">
+        <label><span>DISPLAY NAME</span><input value={name} onChange={e=>setName(e.target.value)} placeholder="Name" required/></label>
+        <label><span>ROBLOX USERNAME</span><input value={username} onChange={e=>setUsername(e.target.value)} placeholder="Optional"/></label>
+        <label><span>BIRTHDAY</span><input type="date" value={date} onChange={e=>setDate(e.target.value)} required/></label>
+      </div>
+      <label><span>OPTIONAL NOTE</span><input value={note} onChange={e=>setNote(e.target.value)} placeholder="Wish them a happy birthday!"/></label>
+      <button className="primary-btn" disabled={saving}>{saving?"Adding...":"Add Birthday"}<Cake size={14}/></button>
+    </form>
+    <div className="birthday-admin-list">{birthdays.length?birthdays.map(item=><article key={item.id}><div className="birthday-date"><Cake size={15}/><strong>{item.date}</strong></div><div><strong>{item.name}</strong><span>{item.username?`@${item.username}`:"Community member"}</span></div><button className="text-danger-btn" onClick={()=>remove(item)}><Trash2 size={13}/>Remove</button></article>):<Empty icon={Cake} title="No birthdays yet" text="Add the first community birthday above."/>}</div>
+  </div>;
+}
 
 function InformationHub({user}){const mg=user.capabilities?.managementInfo,gov=user.capabilities?.governanceInfo;return <div className="page-stack"><SectionHead kicker="ROLE-AWARE RESOURCE CENTER" title="Information Hub." text="Bay Café guidance and server resources automatically unlock based on your rank."/><section className="info-hero"><div><Badge>SIP. RELAX. ENJOY THE BAY.</Badge><h2>Your staff guide,<em>all in one shoreline.</em></h2><p>Read your team expectations, find internal servers, and review leadership standards without digging through old Discord messages.</p></div><a className="primary-btn inline" href="https://discord.gg/ztPy6UKxY" target="_blank" rel="noreferrer">Public Discord<ExternalLink size={14}/></a></section>{gov&&<section className="info-section"><SectionHead kicker="GOVERNANCE TEAM" title="Corporate information." text="Enhanced permissions come with enhanced responsibility."/><div className="welcome-note"><BriefcaseBusiness size={20}/><div><strong>Hey Governance Team!</strong><p>Congratulations on making it here. You still need to follow the team standards while using the enhanced permissions that come with your role. Before beginning your trial, review the information below and contact Leadership if anything is unclear.</p></div></div><div className="info-grid two"><InfoBlock title="Core Requirements"><ul><li><strong>13+ Years Old</strong> — meet the minimum age requirement set by Roblox and Discord.</li><li><strong>Professional Conduct</strong> — act respectfully, maturely, and professionally.</li><li><strong>Zero-Tolerance Policy</strong> — exploiting, hacking, raiding, leaking confidential information, or toxic behavior may result in removal.</li><li><strong>Account Security</strong> — 2FA must remain enabled on Roblox and Discord.</li></ul></InfoBlock><InfoBlock title="Leadership & Integrity"><ul><li>Lead by example and demonstrate the standard expected from staff.</li><li>Enforce rules fairly without favoritism or bias.</li><li>Take responsibility for your decisions and actions.</li><li>Ignoring violations, abusing permissions, exploiting, or bending rules for personal benefit may result in disciplinary action.</li></ul></InfoBlock><InfoBlock title="Staff Supervision & Conflict Management"><ul><li>Support staff growth with guidance and answers.</li><li>Handle corrections calmly, respectfully, and privately when possible.</li><li>Remain neutral during disputes and gather information before deciding.</li><li>Avoid public criticism, arguing, favoritism, or escalating conflicts.</li></ul></InfoBlock><InfoBlock title="Activity & Performance"><ul><li>Remain consistently active within Bay Café.</li><li>Attend required trainings, meetings, shifts, and events when requested.</li><li>Complete assigned responsibilities accurately and efficiently.</li><li>Maintain teamwork and strong customer service.</li></ul></InfoBlock><InfoBlock title="Communication Expectations"><ul><li>Use clear, respectful, professional language.</li><li>Maintain maturity with customers, staff, and Leadership.</li><li>Respond to Leadership requests within a reasonable timeframe.</li><li>Avoid arguing, spamming, trolling, and unnecessary drama.</li></ul></InfoBlock><article className="server-links-card"><span className="eyebrow">CORPORATE SERVERS</span><a href="https://discord.gg/SrMHvhmhMR" target="_blank" rel="noreferrer"><div className="link-icon"><Link2 size={17}/></div><div><strong>Corporate / Mentorship Hub</strong><span>Guidance, logging, leadership support, and corporate development.</span></div><ExternalLink size={15}/></a><a href="https://discord.gg/yvySDe3fVv" target="_blank" rel="noreferrer"><div className="link-icon"><Link2 size={17}/></div><div><strong>Public Relations Corporates</strong><span>PR Corporate coordination and resources.</span></div><ExternalLink size={15}/></a></article></div></section>}{mg&&<section className="info-section"><SectionHead kicker="MANAGEMENT TEAM" title="Management information." text="Leadership begins with consistency, professionalism, and strong judgment."/><div className="welcome-note management"><Sparkles size={20}/><div><strong>Welcome to Management!</strong><p>Your hard work, dedication, and professionalism earned this position. Management members are expected to set an example through maturity, professionalism, and strong leadership at all times.</p></div></div><div className="info-grid two"><InfoBlock title="Activity Requirements"><p>Junior Directors, Senior Directors, and Head Directors must choose one weekly activity option:</p><ul><li>1 hour of in-game activity + 10 minutes of server activity (coming soon)</li><li>OR 2 hours of in-game activity + 5 minutes of server activity</li></ul><p>Bay Café is still under development, so some systems may not track activity automatically yet. Requirement changes will be announced as systems are updated.</p></InfoBlock><InfoBlock title="Support & Questions"><p>Use the support system for exploiter reports, general support inquiries, Management questions, and resignation requests.</p><p>Resignations should be handled privately and should not be publicly announced.</p></InfoBlock><InfoBlock title="Permissions & Responsibilities"><p>Management members have access to special in-game administrative commands used to assist staff and keep the environment professional.</p><p>Admin permissions are a privilege. Abuse, misuse, favoritism, or inappropriate use may result in disciplinary action, demotion, or removal.</p></InfoBlock><InfoBlock title="Final Notes"><p>Management members are role models for the community. Remain active, professional, respectful, and committed to helping Bay Café grow.</p></InfoBlock><article className="server-links-card single"><span className="eyebrow">MANAGEMENT SERVER</span><a href="https://discord.gg/SrMHvhmhMR" target="_blank" rel="noreferrer"><div className="link-icon"><Link2 size={17}/></div><div><strong>Bay Café Management Hub</strong><span>Management communication, guidance, and internal resources.</span></div><ExternalLink size={15}/></a></article></div></section>}{!mg&&<section className="locked-info"><ShieldCheck size={22}/><div><strong>Staff information is ready.</strong><p>Management and Governance resources automatically appear here if your Bay Café rank reaches those teams.</p></div></section>}</div>;}
 

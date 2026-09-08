@@ -27,13 +27,86 @@ app.use(cors({origin(origin,cb){if(!origin)return cb(null,true);const clean=orig
 app.use(express.json({limit:"1mb"}));
 fs.mkdirSync(DATA_DIRECTORY,{recursive:true});
 
-const FILES={discordMessages:path.join(DATA_DIRECTORY,"discord-messages.json"),tickets:path.join(DATA_DIRECTORY,"tickets.json"),applications:path.join(DATA_DIRECTORY,"applications.json"),applicationSubmissions:path.join(DATA_DIRECTORY,"application-submissions.json"),activitySettings:path.join(DATA_DIRECTORY,"activity-settings.json"),activityArchive:path.join(DATA_DIRECTORY,"activity-archive.json")};
+const FILES={discordMessages:path.join(DATA_DIRECTORY,"discord-messages.json"),tickets:path.join(DATA_DIRECTORY,"tickets.json"),applications:path.join(DATA_DIRECTORY,"applications.json"),applicationSubmissions:path.join(DATA_DIRECTORY,"application-submissions.json"),activitySettings:path.join(DATA_DIRECTORY,"activity-settings.json"),activityArchive:path.join(DATA_DIRECTORY,"activity-archive.json"),birthdays:path.join(DATA_DIRECTORY,"birthdays.json")};
 function readJson(file,fallback){try{if(!fs.existsSync(file))return fallback;const raw=fs.readFileSync(file,"utf8");return raw?JSON.parse(raw):fallback;}catch{return fallback;}}
 function writeJson(file,value){const temp=`${file}.tmp`;fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(temp,JSON.stringify(value,null,2));fs.renameSync(temp,file);}
 
 const APPLICATION_BACKUP_DIRECTORY=path.join(DATA_DIRECTORY,"application-backups");
 const APPLICATION_EMPTY_INTENT_FILE=path.join(DATA_DIRECTORY,"applications-empty.intent");
 fs.mkdirSync(APPLICATION_BACKUP_DIRECTORY,{recursive:true});
+
+const STARTER_APPLICATIONS=[
+  {
+    id:"starter-corporate",
+    title:"Corporate Application",
+    description:"Apply to join the Bay Café Corporate Team.",
+    status:"open",
+    questions:[
+      "What is your Roblox username and Discord username?",
+      "Why do you want to join Corporate?",
+      "What leadership experience do you have?",
+      "What is Corporate's main responsibility?",
+      "How would you handle confidential information?",
+      "How would you handle an unprofessional Management member?",
+      "How would you stay fair when dealing with friends?",
+      "What would you do if two departments were not working well together?",
+      "What ideas would you bring to improve Bay Café?",
+      "Why should we choose you for Corporate?"
+    ],
+    createdAt:"2026-09-08T00:00:00.000Z",
+    updatedAt:"2026-09-08T00:00:00.000Z",
+    createdBy:"Bay Café",
+    updatedBy:"Bay Café"
+  },
+  {
+    id:"starter-management",
+    title:"Management Application",
+    description:"Apply to join the Bay Café Management Team.",
+    status:"open",
+    questions:[
+      "What is your Roblox username and Discord username?",
+      "Why do you want to join Management?",
+      "What leadership experience do you have?",
+      "What is Management's most important responsibility?",
+      "How would you handle an inactive or unprofessional staff member?",
+      "How would you handle someone who believes they were disciplined unfairly?",
+      "How would you stay neutral when a friend is involved?",
+      "What would you do if you disagreed with another manager's decision?",
+      "How would you help improve staff activity?",
+      "Why are you ready for Management?"
+    ],
+    createdAt:"2026-09-08T00:00:00.000Z",
+    updatedAt:"2026-09-08T00:00:00.000Z",
+    createdBy:"Bay Café",
+    updatedBy:"Bay Café"
+  },
+  {
+    id:"starter-directing",
+    title:"Directing Team Application",
+    description:"Apply to join the Bay Café Directing Team.",
+    status:"open",
+    questions:[
+      "What is your Roblox username and Discord username?",
+      "Why do you want to join the Directing Team?",
+      "What does professionalism mean to you?",
+      "How would you handle a disrespectful staff member?",
+      "How would you handle a disagreement between two staff members?",
+      "What would you do if someone repeatedly ignored instructions?",
+      "How active can you realistically be each week?",
+      "How would you help a new staff member who is confused?",
+      "What would you do if you saw someone abusing their permissions?",
+      "Why should we choose you for the Directing Team?"
+    ],
+    createdAt:"2026-09-08T00:00:00.000Z",
+    updatedAt:"2026-09-08T00:00:00.000Z",
+    createdBy:"Bay Café",
+    updatedBy:"Bay Café"
+  }
+];
+
+function starterApplications(){
+  return STARTER_APPLICATIONS.map(item=>({...item,questions:[...item.questions]}));
+}
 
 function validApplicationArray(value){
   return Array.isArray(value)&&value.every(item=>item&&typeof item==="object"&&item.id&&item.title);
@@ -96,6 +169,13 @@ function readApplications(){
         return parsed;
       }
     }catch{}
+  }
+
+  if(!fs.existsSync(APPLICATION_EMPTY_INTENT_FILE)){
+    const starters=starterApplications();
+    writeJson(FILES.applications,starters);
+    backupApplications(starters,"starter-seed");
+    return starters;
   }
 
   return Array.isArray(primary)?primary:[];
@@ -649,8 +729,35 @@ async function trackedGuild(){
 async function backfillDiscord(){const guild=await trackedGuild();if(!guild){console.warn("[Bay Café] No Discord guild available for tracking.");return;}const channels=await guild.channels.fetch();const eligible=[...channels.values()].filter(ch=>ch?.isTextBased?.()&&!ch.isThread?.()&&!EXCLUDED_CHANNEL_IDS.has(String(ch.id))&&(!TRACK_CHANNEL_IDS.size||TRACK_CHANNEL_IDS.has(String(ch.id))));for(const ch of eligible){if(!ch?.messages?.fetch)continue;const messages=await fetchRecentMessages(ch,500).catch(()=>[]);for(const message of [...messages].reverse())await persistDiscordMessage(message);}}
 
 
-const DEFAULT_ACTIVITY_SETTINGS={weeklyRequirement:0,updatedAt:null,updatedBy:null};
-function getActivitySettings(){return {...DEFAULT_ACTIVITY_SETTINGS,...readJson(FILES.activitySettings,{})};}
+const DEFAULT_ACTIVITY_SETTINGS={
+  weeklyRequirement:0,
+  rankRequirements:{
+    "junior corporate":50,
+    "senior corporate":75,
+    "head corporate":100,
+    "junior director":25,
+    "senior director":35,
+    "head director":50
+  },
+  updatedAt:null,
+  updatedBy:null
+};
+function getActivitySettings(){
+  const saved=readJson(FILES.activitySettings,{});
+  return {
+    ...DEFAULT_ACTIVITY_SETTINGS,
+    ...saved,
+    rankRequirements:{
+      ...DEFAULT_ACTIVITY_SETTINGS.rankRequirements,
+      ...(saved.rankRequirements||{})
+    }
+  };
+}
+function activityRequirementFor(user,settings=getActivitySettings()){
+  const role=String(user?.roleName||"").trim().toLowerCase();
+  const exact=Number(settings.rankRequirements?.[role]);
+  return Number.isFinite(exact)?exact:(Number(settings.weeklyRequirement)||0);
+}
 function saveActivitySettings(next){const value={...DEFAULT_ACTIVITY_SETTINGS,...next};writeJson(FILES.activitySettings,value);return value;}
 function isLeadershipOrOwnership(user){return Number(user?.level||0)>=4||["leadership","ownership"].includes(String(user?.tier||"").toLowerCase());}
 function archiveCurrentActivity(reason,user){const weekStart=startOfCurrentWeek();const current=readJson(FILES.discordMessages,[]);const thisWeek=current.filter(item=>new Date(item.createdAt)>=weekStart);const archive=readJson(FILES.activityArchive,[]);archive.unshift({id:crypto.randomUUID(),reason:String(reason||"manual"),weekStart:weekStart.toISOString(),archivedAt:new Date().toISOString(),archivedBy:user?.username||"system",messageCount:thisWeek.length,messages:thisWeek});writeJson(FILES.activityArchive,archive.slice(0,20));}
@@ -700,10 +807,15 @@ app.get("/api/activity/me",auth,(req,res)=>{
       (a,b)=>new Date(b.createdAt)-new Date(a.createdAt)
     );
 
+  const settings=getActivitySettings();
+  const weeklyRequirement=activityRequirementFor(req.user,settings);
+
   res.json({
     success:true,
     weekStart:weekStart.toISOString(),
     messageCount:messages.length,
+    weeklyRequirement,
+    meetsRequirement:messages.length>=weeklyRequirement,
     messages
   });
 });
@@ -765,9 +877,88 @@ app.get("/api/discord/channels",auth,(req,res)=>{
 
 
 app.get("/api/activity/admin",auth,(req,res)=>{if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});const weekStart=startOfCurrentWeek();const all=readJson(FILES.discordMessages,[]);const thisWeek=all.filter(item=>new Date(item.createdAt)>=weekStart);const settings=getActivitySettings();const archive=readJson(FILES.activityArchive,[]);res.json({success:true,weekStart:weekStart.toISOString(),totalTracked:all.length,thisWeekTracked:thisWeek.length,settings,recentArchives:archive.slice(0,5).map(item=>({id:item.id,reason:item.reason,archivedAt:item.archivedAt,archivedBy:item.archivedBy,messageCount:item.messageCount}))});});
-app.put("/api/activity/settings",auth,(req,res)=>{if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});const weeklyRequirement=Math.max(0,Math.min(10000,Number(req.body.weeklyRequirement)||0));const settings=saveActivitySettings({weeklyRequirement,updatedAt:new Date().toISOString(),updatedBy:req.user.username});broadcast("activity:settings",settings);res.json({success:true,settings});});
+app.put("/api/activity/settings",auth,(req,res)=>{
+  if(!isLeadershipOrOwnership(req.user)){
+    return res.status(403).json({success:false,message:"Leadership or Ownership access required."});
+  }
+  const current=getActivitySettings();
+  const incoming=req.body.rankRequirements&&typeof req.body.rankRequirements==="object"?req.body.rankRequirements:{};
+  const roles=["junior corporate","senior corporate","head corporate","junior director","senior director","head director"];
+  const rankRequirements={...current.rankRequirements};
+  for(const role of roles){
+    if(incoming[role]!==undefined){
+      rankRequirements[role]=Math.max(0,Math.min(10000,Number(incoming[role])||0));
+    }
+  }
+  const settings=saveActivitySettings({
+    weeklyRequirement:Math.max(0,Math.min(10000,Number(req.body.weeklyRequirement)||0)),
+    rankRequirements,
+    updatedAt:new Date().toISOString(),
+    updatedBy:req.user.username
+  });
+  broadcast("activity:settings",settings);
+  res.json({success:true,settings});
+});
 app.post("/api/activity/rebuild",auth,async(req,res)=>{if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});try{const messageCount=await rebuildDiscordHistory();res.json({success:true,messageCount});}catch(error){res.status(400).json({success:false,message:error.message||"Unable to rebuild activity."});}});
 app.post("/api/activity/reset",auth,(req,res)=>{if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});archiveCurrentActivity("manual reset",req.user);const weekStart=startOfCurrentWeek();const all=readJson(FILES.discordMessages,[]);writeJson(FILES.discordMessages,all.filter(item=>new Date(item.createdAt)<weekStart));broadcast("activity:reset",{weekStart:weekStart.toISOString()});res.json({success:true});});
+
+
+function normalizeBirthdayDate(value){
+  const text=String(value||"").trim();
+  if(!/^\d{2}-\d{2}$/.test(text))return null;
+  const [month,day]=text.split("-").map(Number);
+  const probe=new Date(Date.UTC(2024,month-1,day));
+  if(probe.getUTCMonth()!==month-1||probe.getUTCDate()!==day)return null;
+  return text;
+}
+function birthdaySortKey(dateText){
+  const [month,day]=String(dateText||"01-01").split("-").map(Number);
+  const now=new Date();
+  const year=now.getUTCFullYear();
+  const today=Date.UTC(year,now.getUTCMonth(),now.getUTCDate());
+  let target=Date.UTC(year,month-1,day);
+  if(target<today)target=Date.UTC(year+1,month-1,day);
+  return target;
+}
+function publicBirthday(item){
+  return {id:item.id,name:item.name,username:item.username||"",date:item.date,note:item.note||"",createdAt:item.createdAt,createdBy:item.createdBy};
+}
+app.get("/api/birthdays",(_req,res)=>{
+  const birthdays=readJson(FILES.birthdays,[])
+    .filter(item=>normalizeBirthdayDate(item.date))
+    .sort((a,b)=>birthdaySortKey(a.date)-birthdaySortKey(b.date));
+  const now=new Date();
+  const today=`${String(now.getUTCMonth()+1).padStart(2,"0")}-${String(now.getUTCDate()).padStart(2,"0")}`;
+  res.json({
+    success:true,
+    today,
+    todayBirthdays:birthdays.filter(item=>item.date===today).map(publicBirthday),
+    birthdays:birthdays.map(publicBirthday)
+  });
+});
+app.post("/api/birthdays",auth,(req,res)=>{
+  if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});
+  const name=String(req.body.name||"").trim().slice(0,80);
+  const username=String(req.body.username||"").trim().slice(0,80);
+  const date=normalizeBirthdayDate(req.body.date);
+  const note=String(req.body.note||"").trim().slice(0,300);
+  if(!name)return res.status(400).json({success:false,message:"Enter a birthday name."});
+  if(!date)return res.status(400).json({success:false,message:"Enter a valid birthday date."});
+  const items=readJson(FILES.birthdays,[]);
+  const birthday={id:crypto.randomUUID(),name,username,date,note,createdAt:new Date().toISOString(),createdBy:req.user.username};
+  items.push(birthday);
+  writeJson(FILES.birthdays,items);
+  broadcast("birthday:update",publicBirthday(birthday));
+  res.status(201).json({success:true,birthday:publicBirthday(birthday)});
+});
+app.delete("/api/birthdays/:id",auth,(req,res)=>{
+  if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});
+  const items=readJson(FILES.birthdays,[]);
+  if(!items.some(item=>String(item.id)===String(req.params.id)))return res.status(404).json({success:false,message:"Birthday not found."});
+  writeJson(FILES.birthdays,items.filter(item=>String(item.id)!==String(req.params.id)));
+  broadcast("birthday:delete",{id:req.params.id});
+  res.json({success:true});
+});
 
 function canManageApplications(user){
   return Number(user?.level||0)>=4 ||
