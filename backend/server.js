@@ -789,7 +789,7 @@ app.get("/api/applications",auth,(req,res)=>{
   });
 });
 
-app.get("/api/careers",auth,(_req,res)=>{
+app.get("/api/careers",(_req,res)=>{
   const items=readApplications()
     .filter(item=>String(item.status||"closed").toLowerCase()==="open")
     .sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt));
@@ -972,7 +972,7 @@ function announcementRecord(message){
   };
 }
 
-app.get("/api/announcements",auth,async(_req,res)=>{
+app.get("/api/announcements",async(_req,res)=>{
   try{
     if(!discordClient?.isReady()){
       return res.json({

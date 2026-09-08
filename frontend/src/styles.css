@@ -950,3 +950,76 @@
   font-weight:800;
   letter-spacing:.08em;
 }
+
+
+/* V28 — public community entry */
+.community-entry-divider{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:16px 0 12px;
+  color:#6d98a3;
+  font-size:7px;
+  font-weight:800;
+  letter-spacing:.12em;
+}
+
+.community-entry-divider::before,
+.community-entry-divider::after{
+  content:"";
+  height:1px;
+  flex:1;
+  background:var(--line);
+}
+
+.community-entry-btn{
+  width:100%;
+  min-height:62px;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:center;
+  gap:11px;
+  text-align:left;
+  background:rgba(89,207,232,.055);
+  color:#dff7fb;
+}
+
+.community-entry-btn>svg:first-child{
+  color:#79dceb;
+}
+
+.community-entry-btn strong,
+.community-entry-btn span{
+  display:block;
+}
+
+.community-entry-btn strong{
+  font-size:10px;
+}
+
+.community-entry-btn span{
+  margin-top:3px;
+  color:#7fa7b1;
+  font-size:8px;
+}
+
+.community-entry-btn:hover{
+  background:rgba(89,207,232,.09);
+}
+
+.community-staff-login{
+  min-height:38px;
+  padding:0 12px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  background:rgba(255,255,255,.025);
+  color:#b5d8df;
+  font-size:9px;
+  font-weight:700;
+}

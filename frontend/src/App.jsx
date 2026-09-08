@@ -167,21 +167,11 @@ function useSession(){
     logout
   };
 }
-function Login({onLogin,checking}){
-  const[mode,setMode]=useState("staff");
+function Login({onLogin,checking,onCommunity}){
   const[username,setUsername]=useState("");
   const[challenge,setChallenge]=useState(null);
   const[loading,setLoading]=useState(false);
   const[message,setMessage]=useState("");
-
-  const community=mode==="community";
-
-  const switchMode=next=>{
-    setMode(next);
-    setUsername("");
-    setChallenge(null);
-    setMessage("");
-  };
 
   const start=async event=>{
     event?.preventDefault();
@@ -199,7 +189,10 @@ function Login({onLogin,checking}){
           "/api/auth/start",
           {
             method:"POST",
-            body:JSON.stringify({username,mode})
+            body:JSON.stringify({
+              username,
+              mode:"staff"
+            })
           }
         )
       );
@@ -219,7 +212,9 @@ function Login({onLogin,checking}){
         "/api/auth/verify",
         {
           method:"POST",
-          body:JSON.stringify({challengeId:challenge.challengeId})
+          body:JSON.stringify({
+            challengeId:challenge.challengeId
+          })
         }
       );
 
@@ -231,7 +226,7 @@ function Login({onLogin,checking}){
     }
   };
 
-  return <main className={`login-shell ${community?"community-login":""}`}>
+  return <main className="login-shell">
     <div className="water-glow glow-one"/>
     <div className="water-glow glow-two"/>
 
@@ -240,28 +235,20 @@ function Login({onLogin,checking}){
         <div className="bay-mark"><Waves size={22}/></div>
         <div>
           <strong>BAY CAFÉ</strong>
-          <span>{community?"COMMUNITY":"STAFF WORKSPACE"}</span>
+          <span>STAFF WORKSPACE</span>
         </div>
       </div>
 
       <div className="login-copy">
         <span className="eyebrow">
-          {community
-            ? <><Users size={13}/>COMMUNITY ACCESS</>
-            : <><ShieldCheck size={13}/>PRIVATE STAFF ACCESS</>
-          }
+          <ShieldCheck size={13}/>PRIVATE STAFF ACCESS
         </span>
 
-        <h1>
-          {community?"Welcome to":"Welcome to"}
-          <em>{community?"the community.":"the Bay."}</em>
-        </h1>
+        <h1>Welcome to<em>the Bay.</em></h1>
 
         <p>
-          {community
-            ? "For Entry Team, Visitors, Guests, and anyone exploring Bay Café. View Careers, announcements, community information, and more."
-            : "Directing Team and above can access staff tools, community activity, profiles, support, and rank-aware resources."
-          }
+          Directing Team and above can access staff tools, community activity,
+          profiles, support, and rank-aware resources.
         </p>
       </div>
 
@@ -277,7 +264,7 @@ function Login({onLogin,checking}){
             </label>
 
             <button className="primary-btn" disabled={loading||checking}>
-              {loading?"Checking...":community?"Enter Community":"Staff Login"}
+              {loading?"Checking...":"Staff Login"}
               <ArrowRight size={15}/>
             </button>
           </form>
@@ -290,15 +277,25 @@ function Login({onLogin,checking}){
               </div>
             </div>
 
-            <p>Put this code anywhere in your Roblox <strong>About</strong> section:</p>
+            <p>
+              Put this code anywhere in your Roblox <strong>About</strong> section:
+            </p>
+
             <div className="verification-code">{challenge.code}</div>
 
             <div className="button-row">
-              <a className="secondary-btn" href={challenge.profileUrl} target="_blank" rel="noreferrer">
+              <a
+                className="secondary-btn"
+                href={challenge.profileUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
                 Open Roblox<ExternalLink size={14}/>
               </a>
+
               <button className="primary-btn" onClick={verify} disabled={loading}>
-                {loading?"Verifying...":"Verify"}<CheckCircle2 size={15}/>
+                {loading?"Verifying...":"Verify"}
+                <CheckCircle2 size={15}/>
               </button>
             </div>
           </div>
@@ -306,16 +303,21 @@ function Login({onLogin,checking}){
 
       {message&&<div className="login-message">{message}</div>}
 
+      <div className="community-entry-divider">
+        <span>OR</span>
+      </div>
+
       <button
         type="button"
-        className="access-switch"
-        onClick={()=>switchMode(community?"staff":"community")}
+        className="community-entry-btn"
+        onClick={onCommunity}
       >
-        {community
-          ? "Directing Team or above? Staff Login"
-          : "Not a Staff Member? Enter the Community"
-        }
-        <ChevronRight size={14}/>
+        <Users size={16}/>
+        <div>
+          <strong>Not a staff member?</strong>
+          <span>Click here to enter the Bay Café community.</span>
+        </div>
+        <ChevronRight size={15}/>
       </button>
 
       <div className="login-footer">
@@ -328,19 +330,18 @@ const Badge=({children,tone="aqua"})=><span className={`badge ${tone}`}>{childre
 function SectionHead({kicker,title,text,right}){return <div className="section-head"><div><span className="eyebrow">{kicker}</span><h2>{title}</h2>{text&&<p>{text}</p>}</div>{right}</div>;}
 function Empty({icon:Icon,title,text}){return <div className="empty-state"><div className="empty-icon"><Icon size={20}/></div><strong>{title}</strong><p>{text}</p></div>;}
 
-function CommunityDashboard({token,user,onLogout}){
+function CommunityDashboard({onStaffLogin}){
   const[page,setPage]=useState("home");
   const[announcements,setAnnouncements]=useState([]);
   const[careers,setCareers]=useState([]);
-  const[toast,setToast]=useState("");
 
   const loadAnnouncements=async()=>{
-    const result=await api("/api/announcements",{},token);
+    const result=await api("/api/announcements");
     setAnnouncements(result.announcements||[]);
   };
 
   const loadCareers=async()=>{
-    const result=await api("/api/careers",{},token);
+    const result=await api("/api/careers");
     setCareers(result.careers||[]);
   };
 
@@ -354,13 +355,7 @@ function CommunityDashboard({token,user,onLogout}){
     },15000);
 
     return()=>clearInterval(interval);
-  },[token]);
-
-  useEffect(()=>{
-    if(!toast)return;
-    const timer=setTimeout(()=>setToast(""),2600);
-    return()=>clearTimeout(timer);
-  },[toast]);
+  },[]);
 
   const nav=[
     {id:"home",label:"Community",icon:Waves},
@@ -382,6 +377,7 @@ function CommunityDashboard({token,user,onLogout}){
       <nav className="community-nav">
         {nav.map(item=>{
           const Icon=item.icon;
+
           return <button
             key={item.id}
             className={page===item.id?"active":""}
@@ -393,16 +389,10 @@ function CommunityDashboard({token,user,onLogout}){
         })}
       </nav>
 
-      <div className="community-account">
-        <img src={user.avatar} alt=""/>
-        <div>
-          <strong>{user.displayName}</strong>
-          <span>{user.roleName}</span>
-        </div>
-        <button onClick={onLogout} title="Sign out">
-          <LogOut size={15}/>
-        </button>
-      </div>
+      <button className="community-staff-login" onClick={onStaffLogin}>
+        <ShieldCheck size={14}/>
+        Staff Login
+      </button>
     </header>
 
     <div className="community-page">
@@ -412,12 +402,15 @@ function CommunityDashboard({token,user,onLogout}){
             <Badge tone="green">WELCOME TO BAY CAFÉ</Badge>
             <h1>Community starts at <em>the Bay.</em></h1>
             <p>
-              Explore official announcements, discover open Careers, and stay connected with the Bay Café community.
+              No login needed. Explore official announcements, open Careers,
+              and community information.
             </p>
+
             <div className="button-row">
               <button className="primary-btn" onClick={()=>setPage("careers")}>
                 View Careers<ChevronRight size={15}/>
               </button>
+
               <button className="secondary-btn" onClick={()=>setPage("announcements")}>
                 Announcements<Megaphone size={14}/>
               </button>
@@ -430,6 +423,7 @@ function CommunityDashboard({token,user,onLogout}){
               title="Community announcements."
               text="Recent updates from Bay Café."
             />
+
             <div className="announcement-preview-grid">
               {announcements.slice(0,3).length
                 ? announcements.slice(0,3).map(item=>
@@ -450,9 +444,10 @@ function CommunityDashboard({token,user,onLogout}){
               title="Open Careers."
               text="Applications currently open at Bay Café."
             />
+
             <div className="careers-grid">
-              {careers.slice(0,4).length
-                ? careers.slice(0,4).map(item=>
+              {careers.length
+                ? careers.map(item=>
                     <article className="career-card" key={item.id}>
                       <div className="career-card-head">
                         <div>
@@ -461,11 +456,12 @@ function CommunityDashboard({token,user,onLogout}){
                         </div>
                         <BriefcaseBusiness size={18}/>
                       </div>
+
                       {item.description&&<p>{item.description}</p>}
-                      <div className="button-row career-actions">
-                        <button className="primary-btn" onClick={()=>setPage("careers")}>
-                          Apply<ChevronRight size={15}/>
-                        </button>
+
+                      <div className="career-meta">
+                        <span>{(item.questions||[]).length} application questions</span>
+                        <span>{formatDate(item.updatedAt||item.createdAt)}</span>
                       </div>
                     </article>
                   )
@@ -480,8 +476,54 @@ function CommunityDashboard({token,user,onLogout}){
         </div>
       }
 
-      {page==="announcements"&&<AnnouncementsPage items={announcements}/>}
-      {page==="careers"&&<CareersPage token={token} items={careers} setToast={setToast}/>}
+      {page==="announcements"&&
+        <AnnouncementsPage items={announcements}/>
+      }
+
+      {page==="careers"&&
+        <div className="page-stack">
+          <SectionHead
+            kicker="BAY CAFÉ OPPORTUNITIES"
+            title="Careers."
+            text="Browse current Bay Café opportunities. Community browsing does not require an account."
+            right={<Badge tone="green">{careers.length} OPEN</Badge>}
+          />
+
+          <div className="careers-grid">
+            {careers.length
+              ? careers.map(item=>
+                  <article className="career-card" key={item.id}>
+                    <div className="career-card-head">
+                      <div>
+                        <Badge tone="green">OPEN</Badge>
+                        <h3>{item.title}</h3>
+                      </div>
+                      <BriefcaseBusiness size={18}/>
+                    </div>
+
+                    {item.description&&<p>{item.description}</p>}
+
+                    {(item.questions||[]).length>0&&
+                      <div className="career-preview">
+                        <span>APPLICATION QUESTIONS</span>
+                        <ol>
+                          {item.questions.slice(0,5).map((question,index)=>
+                            <li key={index}>{question}</li>
+                          )}
+                        </ol>
+                      </div>
+                    }
+                  </article>
+                )
+              : <Empty
+                  icon={BriefcaseBusiness}
+                  title="No open careers right now"
+                  text="When Leadership opens an application, it will appear here."
+                />
+            }
+          </div>
+        </div>
+      }
 
       {page==="about"&&
         <div className="page-stack">
@@ -497,11 +539,13 @@ function CommunityDashboard({token,user,onLogout}){
               <h3>Community First</h3>
               <p>Meet people, participate, grow, and enjoy the Bay Café community.</p>
             </article>
+
             <article>
               <BriefcaseBusiness size={19}/>
               <h3>Grow With Us</h3>
-              <p>Explore Careers when applications for new opportunities are open.</p>
+              <p>Explore Careers whenever new opportunities are open.</p>
             </article>
+
             <article>
               <Megaphone size={19}/>
               <h3>Stay Updated</h3>
@@ -511,11 +555,8 @@ function CommunityDashboard({token,user,onLogout}){
         </div>
       }
     </div>
-
-    {toast&&<div className="toast"><Sparkles size={14}/>{toast}</div>}
   </main>;
 }
-
 function Dashboard({token,user,onLogout}){
   const[page,setPage]=useState("overview");
   const[mobileOpen,setMobileOpen]=useState(false);
@@ -1696,4 +1737,25 @@ function Profiles({token}){
 }
 function TicketsPage({token,user,items,reload,setToast}){const[form,setForm]=useState({type:"General Support",subject:"",details:""}),[selectedId,setSelectedId]=useState(""),[reply,setReply]=useState(""),[loading,setLoading]=useState(false);const selected=items.find(x=>x.id===selectedId)||items[0]||null;useEffect(()=>{if(!selectedId&&items[0])setSelectedId(items[0].id)},[items,selectedId]);const submit=async e=>{e.preventDefault();setLoading(true);try{const r=await api("/api/tickets",{method:"POST",body:JSON.stringify(form)},token);setForm({type:"General Support",subject:"",details:""});await reload();setSelectedId(r.ticket.id);setToast("Support ticket opened")}catch(err){setToast(err.message)}finally{setLoading(false)}};const sendReply=async e=>{e.preventDefault();if(!selected||!reply.trim())return;try{const r=await api(`/api/tickets/${selected.id}/messages`,{method:"POST",body:JSON.stringify({content:reply})},token);setReply("");await reload();setSelectedId(r.ticket.id)}catch(err){setToast(err.message)}};const closeTicket=async()=>{if(!selected)return;try{await api(`/api/tickets/${selected.id}/close`,{method:"POST"},token);await reload();setToast("Ticket closed")}catch(err){setToast(err.message)}};return <div className="page-stack"><SectionHead kicker="SUPPORT CENTER" title="Website support." text="Create a ticket here and continue the conversation from the website. Discord staff can reply through the linked thread when configured."/><div className="ticket-layout"><aside className="ticket-side"><form className="ticket-form" onSubmit={submit}><h3>New Ticket</h3><label><span>TYPE</span><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option>General Support</option><option>Management Question</option><option>Exploiter Report</option><option>Resignation</option><option>Other</option></select></label><label><span>SUBJECT</span><input value={form.subject} onChange={e=>setForm({...form,subject:e.target.value})} placeholder="Short summary"/></label><label><span>MESSAGE</span><textarea rows="5" value={form.details} onChange={e=>setForm({...form,details:e.target.value})} placeholder="Explain what you need help with..."/></label><button className="primary-btn" disabled={loading}>{loading?"Opening...":"Open Ticket"}<Ticket size={14}/></button></form><div className="ticket-list"><div className="ticket-list-head"><strong>{user.capabilities?.ticketAdmin?"All Tickets":"Your Tickets"}</strong><span>{items.length}</span></div>{items.map(item=><button key={item.id} className={selected?.id===item.id?"active":""} onClick={()=>setSelectedId(item.id)}><div><strong>{item.subject}</strong><span>{item.type}</span></div><Badge tone={item.status==="open"?"green":"sand"}>{item.status}</Badge></button>)}</div></aside><section className="ticket-thread">{selected?<><div className="ticket-thread-head"><div><span className="eyebrow">{selected.type}</span><h3>{selected.subject}</h3><small>{selected.id}</small></div><div className="thread-actions"><Badge tone={selected.status==="open"?"green":"sand"}>{selected.status}</Badge>{selected.status==="open"&&<button className="secondary-btn compact" onClick={closeTicket}>Close</button>}</div></div><div className="ticket-messages">{(selected.messages||[]).map(m=><article key={m.id} className={String(m.authorId)===String(user.id)?"mine":"staff"}><div><strong>{m.authorDisplayName||m.authorUsername}</strong><span>{m.authorType==="staff"?"STAFF":"USER"}</span><small>{formatDate(m.createdAt)}</small></div><p>{m.content}</p></article>)}</div>{selected.status==="open"?<form className="ticket-reply" onSubmit={sendReply}><textarea rows="3" value={reply} onChange={e=>setReply(e.target.value)} placeholder="Write a reply..."/><button className="primary-btn">Send Reply<MessageCircleMore size={14}/></button></form>:<div className="closed-note">This ticket is closed.</div>}</>:<Empty icon={LifeBuoy} title="Select a ticket" text="Your support conversation will appear here."/>}</section></div></div>;}
 
-export default function App(){const session=useSession();if(!session.user)return <Login onLogin={session.login} checking={session.checking}/>;if(session.user.accessMode==="community")return <CommunityDashboard token={session.token} user={session.user} onLogout={session.logout}/>;return <Dashboard token={session.token} user={session.user} onLogout={session.logout}/>;}
+export default function App(){
+  const session=useSession();
+  const[communityOpen,setCommunityOpen]=useState(false);
+
+  if(communityOpen&&!session.user){
+    return <CommunityDashboard onStaffLogin={()=>setCommunityOpen(false)}/>;
+  }
+
+  if(!session.user){
+    return <Login
+      onLogin={session.login}
+      checking={session.checking}
+      onCommunity={()=>setCommunityOpen(true)}
+    />;
+  }
+
+  return <Dashboard
+    token={session.token}
+    user={session.user}
+    onLogout={session.logout}
+  />;
+}
