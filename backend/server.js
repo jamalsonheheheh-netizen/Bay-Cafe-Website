@@ -91,15 +91,19 @@ function readApplications(){
 }
 
 function saveApplications(items,reason="update"){
-  if(!Array.isArray(items))throw new Error("Application storage expected an array.");
+  if(!Array.isArray(items)){
+    throw new Error("Application storage expected an array.");
+  }
 
   const current=readApplications();
+
   if(current.length||fs.existsSync(FILES.applications)){
     backupApplications(current,`before-${reason}`);
   }
 
-  saveApplications(items,"create");
+  writeJson(FILES.applications,items);
   backupApplications(items,`after-${reason}`);
+
   return items;
 }
 
