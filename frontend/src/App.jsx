@@ -168,6 +168,75 @@ function useSession(){
     logout
   };
 }
+
+function SiteIntro(){
+  return <main className="bay-intro" aria-label="Bay Café loading">
+    <div className="intro-ocean"/>
+    <div className="intro-sun"/>
+    <div className="intro-particles">
+      {Array.from({length:14}).map((_,index)=>
+        <span key={index} style={{"--i":index}}/>
+      )}
+    </div>
+
+    <div className="intro-electric-ring ring-one"/>
+    <div className="intro-electric-ring ring-two"/>
+    <div className="intro-electric-ring ring-three"/>
+
+    <div className="intro-bolt bolt-one"/>
+    <div className="intro-bolt bolt-two"/>
+    <div className="intro-bolt bolt-three"/>
+
+    <section className="intro-core">
+      <div className="intro-logo-orbit">
+        <div className="intro-logo">
+          <Waves size={38}/>
+        </div>
+      </div>
+
+      <span className="intro-kicker">WELCOME TO THE BAY</span>
+      <h1>BAY CAFÉ</h1>
+      <p>Sip. Relax. Enjoy The Bay.</p>
+
+      <div className="intro-progress">
+        <span/>
+      </div>
+    </section>
+
+    <div className="intro-wave wave-a"/>
+    <div className="intro-wave wave-b"/>
+    <div className="intro-wave wave-c"/>
+  </main>;
+}
+
+function StaffEntryTransition({user}){
+  return <main className="staff-entry-transition">
+    <div className="staff-transition-grid"/>
+    <div className="staff-transition-glow"/>
+    <div className="staff-transition-scan"/>
+
+    <section className="staff-transition-card">
+      <div className="staff-shield-ring">
+        <ShieldCheck size={34}/>
+      </div>
+
+      <span className="eyebrow">STAFF ACCESS VERIFIED</span>
+      <h1>Welcome back{user?.displayName?`, ${user.displayName}`:""}.</h1>
+      <p>Preparing your Bay Café Staff Hub...</p>
+
+      <div className="staff-loading-track">
+        <span/>
+      </div>
+
+      <div className="staff-loading-steps">
+        <span>Identity</span>
+        <span>Permissions</span>
+        <span>Workspace</span>
+      </div>
+    </section>
+  </main>;
+}
+
 function Login({onLogin,checking,onCommunity}){
   const[username,setUsername]=useState("");
   const[challenge,setChallenge]=useState(null);
@@ -2215,6 +2284,32 @@ function TicketsPage({token,user,items,reload,setToast}){const[form,setForm]=use
 export default function App(){
   const session=useSession();
   const[communityOpen,setCommunityOpen]=useState(false);
+  const[showIntro,setShowIntro]=useState(true);
+  const[staffTransition,setStaffTransition]=useState(false);
+  const[transitionUser,setTransitionUser]=useState(null);
+
+  useEffect(()=>{
+    const timer=setTimeout(()=>setShowIntro(false),2900);
+    return()=>clearTimeout(timer);
+  },[]);
+
+  const handleStaffLogin=(token,user)=>{
+    setTransitionUser(user);
+    setStaffTransition(true);
+    session.login(token,user);
+
+    setTimeout(()=>{
+      setStaffTransition(false);
+    },2100);
+  };
+
+  if(showIntro){
+    return <SiteIntro/>;
+  }
+
+  if(staffTransition){
+    return <StaffEntryTransition user={transitionUser||session.user}/>;
+  }
 
   if(communityOpen&&!session.user){
     return <CommunityDashboard onStaffLogin={()=>setCommunityOpen(false)}/>;
@@ -2222,7 +2317,7 @@ export default function App(){
 
   if(!session.user){
     return <Login
-      onLogin={session.login}
+      onLogin={handleStaffLogin}
       checking={session.checking}
       onCommunity={()=>setCommunityOpen(true)}
     />;
