@@ -16,6 +16,7 @@ const API =
         )
   ).replace(/\/$/, "");
 const TOKEN_KEY="bay.cafe.session",USER_KEY="bay.cafe.user";
+const APPLICATION_MIRROR_KEY="bay.cafe.applications.mirror.v1";
 
 async function api(path, options = {}, token = "") {
   let response;
@@ -623,7 +624,63 @@ function Dashboard({token,user,onLogout}){
     }
 
     const result=await api("/api/applications",{},token);
-    setApplications(result.applications||[]);
+    let serverItems=result.applications||[];
+
+    if(serverItems.length){
+      setApplications(serverItems);
+
+      try{
+        localStorage.setItem(
+          APPLICATION_MIRROR_KEY,
+          JSON.stringify({
+            applications:serverItems,
+            savedAt:Date.now()
+          })
+        );
+      }catch{}
+
+      return;
+    }
+
+    let mirror=[];
+
+    try{
+      const stored=JSON.parse(
+        localStorage.getItem(APPLICATION_MIRROR_KEY)||"null"
+      );
+
+      mirror=Array.isArray(stored?.applications)
+        ? stored.applications
+        : [];
+    }catch{}
+
+    const shouldRecover=
+      mirror.length>0 &&
+      !result.storage?.intentionalEmpty;
+
+    if(shouldRecover){
+      try{
+        const restored=await api(
+          "/api/applications/restore",
+          {
+            method:"POST",
+            body:JSON.stringify({
+              applications:mirror
+            })
+          },
+          token
+        );
+
+        serverItems=restored.applications||mirror;
+        setApplications(serverItems);
+        setToast(`Recovered ${serverItems.length} saved application${serverItems.length===1?"":"s"} from this browser.`);
+        return;
+      }catch(error){
+        console.warn("Application recovery failed:",error);
+      }
+    }
+
+    setApplications([]);
   }
 
   async function loadCareers(){
@@ -1364,6 +1421,40 @@ function ApplicationsPage({token,user,items,canManage,submissions,reload,setToas
         setToast("Application created.");
       }
 
+      try{
+        const currentMirror=JSON.parse(
+          localStorage.getItem(APPLICATION_MIRROR_KEY)||"null"
+        );
+
+        const existing=Array.isArray(currentMirror?.applications)
+          ? currentMirror.applications
+          : [];
+
+        const optimistic={
+          id:editing||`local-${Date.now()}`,
+          title,
+          description,
+          status,
+          questions:payload.questions,
+          createdAt:new Date().toISOString(),
+          updatedAt:new Date().toISOString(),
+          createdBy:user?.username||"staff",
+          updatedBy:user?.username||"staff"
+        };
+
+        const next=editing
+          ? existing.map(item=>String(item.id)===String(editing)?{...item,...optimistic,id:item.id}:item)
+          : [optimistic,...existing];
+
+        localStorage.setItem(
+          APPLICATION_MIRROR_KEY,
+          JSON.stringify({
+            applications:next,
+            savedAt:Date.now()
+          })
+        );
+      }catch{}
+
       reset();
       await reload();
     }catch(error){
@@ -1405,7 +1496,9 @@ function ApplicationsPage({token,user,items,canManage,submissions,reload,setToas
           <div>
             <span className="eyebrow">{editing?"EDIT APPLICATION":"NEW APPLICATION"}</span>
             <h2>{editing?"Update application":"Create an application"}</h2>
-            <small className="draft-saved-note">Draft auto-saves on this device.</small>
+            <small className="draft-saved-note">
+              Draft + created applications are mirrored on this browser for recovery.
+            </small>
           </div>
           {editing&&
             <button type="button" className="secondary-btn" onClick={reset}>

@@ -1023,3 +1023,10 @@
   font-size:9px;
   font-weight:700;
 }
+
+
+/* V31 — persistent application recovery */
+.draft-saved-note{
+  max-width:520px;
+  line-height:1.45;
+}

@@ -32,6 +32,7 @@ function readJson(file,fallback){try{if(!fs.existsSync(file))return fallback;con
 function writeJson(file,value){const temp=`${file}.tmp`;fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(temp,JSON.stringify(value,null,2));fs.renameSync(temp,file);}
 
 const APPLICATION_BACKUP_DIRECTORY=path.join(DATA_DIRECTORY,"application-backups");
+const APPLICATION_EMPTY_INTENT_FILE=path.join(DATA_DIRECTORY,"applications-empty.intent");
 fs.mkdirSync(APPLICATION_BACKUP_DIRECTORY,{recursive:true});
 
 function validApplicationArray(value){
@@ -65,12 +66,20 @@ function backupApplications(items,reason="update"){
 }
 
 function readApplications(){
+  let primary=[];
+
   try{
     if(fs.existsSync(FILES.applications)){
       const raw=fs.readFileSync(FILES.applications,"utf8");
-      const parsed=raw?JSON.parse(raw):[];
-      if(validApplicationArray(parsed))return parsed;
-      if(Array.isArray(parsed)&&parsed.length===0)return parsed;
+      primary=raw?JSON.parse(raw):[];
+
+      if(validApplicationArray(primary)&&primary.length){
+        return primary;
+      }
+
+      if(Array.isArray(primary)&&primary.length===0&&fs.existsSync(APPLICATION_EMPTY_INTENT_FILE)){
+        return [];
+      }
     }
   }catch(error){
     console.error(`[Bay Café] Primary applications file could not be read: ${error.message}`);
@@ -79,15 +88,17 @@ function readApplications(){
   for(const backupFile of applicationBackupFiles()){
     try{
       const parsed=JSON.parse(fs.readFileSync(backupFile,"utf8"));
-      if(validApplicationArray(parsed)||Array.isArray(parsed)){
+
+      if(validApplicationArray(parsed)&&parsed.length){
         console.warn(`[Bay Café] Restoring applications from backup ${path.basename(backupFile)}`);
         writeJson(FILES.applications,parsed);
+        try{fs.unlinkSync(APPLICATION_EMPTY_INTENT_FILE)}catch{}
         return parsed;
       }
     }catch{}
   }
 
-  return [];
+  return Array.isArray(primary)?primary:[];
 }
 
 function saveApplications(items,reason="update"){
@@ -97,12 +108,24 @@ function saveApplications(items,reason="update"){
 
   const current=readApplications();
 
-  if(current.length||fs.existsSync(FILES.applications)){
+  if(current.length){
     backupApplications(current,`before-${reason}`);
   }
 
   writeJson(FILES.applications,items);
-  backupApplications(items,`after-${reason}`);
+
+  if(items.length){
+    try{fs.unlinkSync(APPLICATION_EMPTY_INTENT_FILE)}catch{}
+    backupApplications(items,`after-${reason}`);
+  }else if(reason==="delete"){
+    fs.writeFileSync(
+      APPLICATION_EMPTY_INTENT_FILE,
+      JSON.stringify({
+        intentional:true,
+        createdAt:new Date().toISOString()
+      })
+    );
+  }
 
   return items;
 }
@@ -789,7 +812,59 @@ app.get("/api/applications",auth,(req,res)=>{
 
   res.json({
     success:true,
-    applications:items.map(publicApplication)
+    applications:items.map(publicApplication),
+    storage:{
+      intentionalEmpty:fs.existsSync(APPLICATION_EMPTY_INTENT_FILE),
+      hasPrimary:fs.existsSync(FILES.applications),
+      backupCount:applicationBackupFiles().length
+    }
+  });
+});
+
+app.post("/api/applications/restore",auth,(req,res)=>{
+  if(!canManageApplications(req.user)){
+    return res.status(403).json({
+      success:false,
+      message:"Leadership or Ownership access is required to restore applications."
+    });
+  }
+
+  const raw=Array.isArray(req.body.applications)?req.body.applications:[];
+
+  const restored=raw
+    .filter(item=>item&&typeof item==="object")
+    .map(item=>({
+      id:String(item.id||crypto.randomUUID()),
+      title:String(item.title||"").trim().slice(0,100),
+      description:String(item.description||"").trim().slice(0,3000),
+      status:String(item.status||"open").toLowerCase()==="closed"?"closed":"open",
+      questions:cleanQuestions(item.questions),
+      createdAt:item.createdAt||new Date().toISOString(),
+      updatedAt:new Date().toISOString(),
+      createdBy:item.createdBy||req.user.username,
+      updatedBy:req.user.username
+    }))
+    .filter(item=>item.title)
+    .slice(0,100);
+
+  if(!restored.length){
+    return res.status(400).json({
+      success:false,
+      message:"No valid applications were provided for restore."
+    });
+  }
+
+  saveApplications(restored,"browser-restore");
+  try{fs.unlinkSync(APPLICATION_EMPTY_INTENT_FILE)}catch{}
+
+  broadcast("application:update",{
+    action:"restored",
+    count:restored.length
+  });
+
+  res.json({
+    success:true,
+    applications:restored.map(publicApplication)
   });
 });
 
