@@ -876,7 +876,131 @@ app.get("/api/discord/channels",auth,(req,res)=>{
 
 
 
-app.get("/api/activity/admin",auth,(req,res)=>{if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});const weekStart=startOfCurrentWeek();const all=readJson(FILES.discordMessages,[]);const thisWeek=all.filter(item=>new Date(item.createdAt)>=weekStart);const settings=getActivitySettings();const archive=readJson(FILES.activityArchive,[]);res.json({success:true,weekStart:weekStart.toISOString(),totalTracked:all.length,thisWeekTracked:thisWeek.length,settings,recentArchives:archive.slice(0,5).map(item=>({id:item.id,reason:item.reason,archivedAt:item.archivedAt,archivedBy:item.archivedBy,messageCount:item.messageCount}))});});
+function activityTeamForRole(roleName=""){
+  const name=String(roleName).trim().toLowerCase();
+
+  if(
+    ["junior corporate","senior corporate","head corporate","corporate intern"]
+      .some(value=>name.includes(value))
+  ){
+    return "Corporate";
+  }
+
+  if(
+    ["junior director","senior director","head director","management"]
+      .some(value=>name.includes(value))
+  ){
+    return "Management";
+  }
+
+  if(
+    ["staff assistant","general manager","assistant manager","supervisor"]
+      .some(value=>name.includes(value))
+  ){
+    return "Directing";
+  }
+
+  return null;
+}
+
+app.get("/api/activity/admin",auth,async(req,res)=>{
+  if(!isLeadershipOrOwnership(req.user)){
+    return res.status(403).json({
+      success:false,
+      message:"Leadership or Ownership access required."
+    });
+  }
+
+  try{
+    const weekStart=startOfCurrentWeek();
+    const all=readJson(FILES.discordMessages,[]);
+    const thisWeek=all
+      .filter(item=>new Date(item.createdAt)>=weekStart)
+      .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+
+    const settings=getActivitySettings();
+    const archive=readJson(FILES.activityArchive,[]);
+    const directory=await bayCafeDirectory();
+
+    const members=directory
+      .map(member=>{
+        const team=activityTeamForRole(member.roleName);
+        if(!team)return null;
+
+        const names=new Set([
+          normalizeIdentity(member.username),
+          normalizeIdentity(member.displayName)
+        ]);
+
+        const messages=thisWeek.filter(message=>
+          [
+            normalizeIdentity(message.authorUsername),
+            normalizeIdentity(message.authorName)
+          ].some(value=>value&&names.has(value))
+        );
+
+        const requirement=activityRequirementFor(
+          {roleName:member.roleName},
+          settings
+        );
+
+        return {
+          id:member.id,
+          username:member.username,
+          displayName:member.displayName,
+          roleName:member.roleName,
+          roleRank:member.roleRank,
+          team,
+          messageCount:messages.length,
+          requirement,
+          meetsRequirement:messages.length>=requirement,
+          avatar:messages[0]?.authorAvatar||"",
+          messages:messages.slice(0,500).map(message=>({
+            id:message.id,
+            channelId:message.channelId,
+            channelName:message.channelName,
+            content:message.content,
+            createdAt:message.createdAt,
+            url:message.url
+          }))
+        };
+      })
+      .filter(Boolean)
+      .sort((a,b)=>{
+        const teamOrder={Corporate:0,Management:1,Directing:2};
+        const teamDiff=(teamOrder[a.team]??9)-(teamOrder[b.team]??9);
+        if(teamDiff)return teamDiff;
+        if(b.roleRank!==a.roleRank)return b.roleRank-a.roleRank;
+        return String(a.username).localeCompare(String(b.username));
+      });
+
+    res.json({
+      success:true,
+      weekStart:weekStart.toISOString(),
+      totalTracked:all.length,
+      thisWeekTracked:thisWeek.length,
+      settings,
+      members,
+      teamTotals:{
+        Corporate:members.filter(item=>item.team==="Corporate").length,
+        Management:members.filter(item=>item.team==="Management").length,
+        Directing:members.filter(item=>item.team==="Directing").length
+      },
+      recentArchives:archive.slice(0,5).map(item=>({
+        id:item.id,
+        reason:item.reason,
+        archivedAt:item.archivedAt,
+        archivedBy:item.archivedBy,
+        messageCount:item.messageCount
+      }))
+    });
+  }catch(error){
+    res.status(400).json({
+      success:false,
+      message:error.message||"Unable to load activity management."
+    });
+  }
+});
 app.put("/api/activity/settings",auth,(req,res)=>{
   if(!isLeadershipOrOwnership(req.user)){
     return res.status(403).json({success:false,message:"Leadership or Ownership access required."});

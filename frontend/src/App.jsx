@@ -1722,32 +1722,73 @@ function ActivityAdminPage({token,setToast}){
   const[data,setData]=useState(null);
   const[loading,setLoading]=useState(false);
   const[requirements,setRequirements]=useState({});
-  const load=async()=>{const result=await api("/api/activity/admin",{},token);setData(result);setRequirements(result.settings?.rankRequirements||{});};
-  useEffect(()=>{load().catch(error=>setToast(error.message));},[token]);
+  const[teamFilter,setTeamFilter]=useState("All");
+  const[expanded,setExpanded]=useState(null);
+
+  const load=async()=>{
+    const result=await api("/api/activity/admin",{},token);
+    setData(result);
+    setRequirements(result.settings?.rankRequirements||{});
+  };
+
+  useEffect(()=>{
+    load().catch(error=>setToast(error.message));
+  },[token]);
 
   const save=async()=>{
     setLoading(true);
     try{
-      await api("/api/activity/settings",{method:"PUT",body:JSON.stringify({weeklyRequirement:Number(data?.settings?.weeklyRequirement)||0,rankRequirements:requirements})},token);
+      await api(
+        "/api/activity/settings",
+        {
+          method:"PUT",
+          body:JSON.stringify({
+            weeklyRequirement:Number(data?.settings?.weeklyRequirement)||0,
+            rankRequirements:requirements
+          })
+        },
+        token
+      );
       setToast("Rank activity requirements updated.");
       await load();
-    }catch(error){setToast(error.message)}finally{setLoading(false)}
+    }catch(error){
+      setToast(error.message);
+    }finally{
+      setLoading(false);
+    }
   };
 
   const rebuild=async()=>{
     setLoading(true);
-    try{const result=await api("/api/activity/rebuild",{method:"POST"},token);setToast(`Activity rebuilt: ${result.messageCount||0} messages tracked.`);await load()}
-    catch(error){setToast(error.message)}finally{setLoading(false)}
+    try{
+      const result=await api("/api/activity/rebuild",{method:"POST"},token);
+      setToast(`Activity rebuilt: ${result.messageCount||0} messages tracked.`);
+      await load();
+    }catch(error){
+      setToast(error.message);
+    }finally{
+      setLoading(false);
+    }
   };
 
   const reset=async()=>{
     if(!window.confirm("Reset this week's activity? A snapshot will be archived first."))return;
+
     setLoading(true);
-    try{await api("/api/activity/reset",{method:"POST"},token);setToast("Current week reset.");await load()}
-    catch(error){setToast(error.message)}finally{setLoading(false)}
+    try{
+      await api("/api/activity/reset",{method:"POST"},token);
+      setToast("Current week reset.");
+      await load();
+    }catch(error){
+      setToast(error.message);
+    }finally{
+      setLoading(false);
+    }
   };
 
-  if(!data)return <div className="notice">Loading activity management...</div>;
+  if(!data){
+    return <div className="notice">Loading activity management...</div>;
+  }
 
   const fields=[
     ["junior corporate","Junior Corporate","JC"],
@@ -1758,31 +1799,184 @@ function ActivityAdminPage({token,setToast}){
     ["head director","Head Director","HD"]
   ];
 
+  const visibleMembers=(data.members||[])
+    .filter(member=>teamFilter==="All"||member.team===teamFilter);
+
   return <div className="page-stack">
-    <SectionHead kicker="LEADERSHIP / OWNERSHIP" title="Activity Management." text="Manage weekly Discord requirements, rebuild tracking, reset the week, and review archived snapshots." right={<Badge tone="green">PRIVATE</Badge>}/>
+    <SectionHead
+      kicker="LEADERSHIP / OWNERSHIP"
+      title="Activity Management."
+      text="See every tracked member in Corporate, Management, and Directing, including their weekly message count and the messages they sent."
+      right={<Badge tone="green">PRIVATE</Badge>}
+    />
+
     <div className="activity-admin-stats">
       <article><span>THIS WEEK</span><strong>{data.thisWeekTracked}</strong><small>tracked messages</small></article>
+      <article><span>MEMBERS</span><strong>{(data.members||[]).length}</strong><small>across tracked teams</small></article>
       <article><span>TOTAL STORED</span><strong>{data.totalTracked}</strong><small>persistent records</small></article>
-      <article><span>RANK RULES</span><strong>6</strong><small>configured requirements</small></article>
     </div>
+
+    <section className="activity-roster-section">
+      <div className="activity-roster-head">
+        <div>
+          <span className="eyebrow">TEAM ACTIVITY</span>
+          <h3>Everyone's messages</h3>
+          <p>Open a member to see every tracked message from this week.</p>
+        </div>
+
+        <div className="activity-team-filters">
+          {["All","Corporate","Management","Directing"].map(team=>
+            <button
+              type="button"
+              key={team}
+              className={teamFilter===team?"active":""}
+              onClick={()=>setTeamFilter(team)}
+            >
+              {team}
+              {team!=="All"&&<span>{data.teamTotals?.[team]||0}</span>}
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="activity-member-list">
+        {visibleMembers.length
+          ? visibleMembers.map(member=>{
+              const isOpen=expanded===member.id;
+
+              return <article className={`activity-member ${isOpen?"open":""}`} key={member.id}>
+                <button
+                  type="button"
+                  className="activity-member-summary"
+                  onClick={()=>setExpanded(isOpen?null:member.id)}
+                >
+                  <div className="activity-member-avatar">
+                    {member.avatar
+                      ? <img src={member.avatar} alt=""/>
+                      : <Users size={17}/>
+                    }
+                  </div>
+
+                  <div className="activity-member-name">
+                    <strong>{member.displayName||member.username}</strong>
+                    <span>@{member.username} • {member.roleName}</span>
+                  </div>
+
+                  <Badge>{member.team}</Badge>
+
+                  <div className="activity-member-count">
+                    <strong>{member.messageCount}</strong>
+                    <span>{member.requirement>0?`/ ${member.requirement}`:"messages"}</span>
+                  </div>
+
+                  <Badge tone={member.requirement>0?(member.meetsRequirement?"green":"sand"):"aqua"}>
+                    {member.requirement>0
+                      ? member.meetsRequirement?"MET":"NOT MET"
+                      : "TRACKING"
+                    }
+                  </Badge>
+
+                  <ChevronRight size={15} className="activity-member-chevron"/>
+                </button>
+
+                {isOpen&&
+                  <div className="activity-member-messages">
+                    {(member.messages||[]).length
+                      ? member.messages.map(message=>
+                          <article key={message.id}>
+                            <div>
+                              <strong>#{message.channelName||"unknown-channel"}</strong>
+                              <span>{formatDate(message.createdAt)}</span>
+                            </div>
+                            <p>{message.content||"(No text content)"}</p>
+                            {message.url&&
+                              <a href={message.url} target="_blank" rel="noreferrer">
+                                Open in Discord<ExternalLink size={12}/>
+                              </a>
+                            }
+                          </article>
+                        )
+                      : <div className="activity-no-messages">
+                          No tracked messages from this member this week.
+                        </div>
+                    }
+                  </div>
+                }
+              </article>;
+            })
+          : <Empty
+              icon={MessageCircleMore}
+              title="No members found"
+              text="No members match this team filter."
+            />
+        }
+      </div>
+    </section>
 
     <article className="activity-admin-card">
       <span className="eyebrow">WEEKLY MESSAGE REQUIREMENTS</span>
       <h3>Corporate & Management</h3>
       <p>Requirements are applied automatically based on the member's Roblox group rank.</p>
+
       <div className="rank-requirement-grid">
-        {fields.map(([key,label,short])=><label key={key}><div><strong>{short}</strong><span>{label}</span></div><input type="number" min="0" max="10000" value={requirements[key]??0} onChange={event=>setRequirements(current=>({...current,[key]:Number(event.target.value)||0}))}/></label>)}
+        {fields.map(([key,label,short])=>
+          <label key={key}>
+            <div><strong>{short}</strong><span>{label}</span></div>
+            <input
+              type="number"
+              min="0"
+              max="10000"
+              value={requirements[key]??0}
+              onChange={event=>
+                setRequirements(current=>({
+                  ...current,
+                  [key]:Number(event.target.value)||0
+                }))
+              }
+            />
+          </label>
+        )}
       </div>
-      <button className="primary-btn" onClick={save} disabled={loading}>Save Requirements</button>
+
+      <button className="primary-btn" onClick={save} disabled={loading}>
+        Save Requirements
+      </button>
     </article>
 
     <div className="activity-admin-grid two">
-      <article className="activity-admin-card"><h3>Rebuild activity</h3><p>Re-scan recent Discord history and rebuild stored records.</p><button className="primary-btn" onClick={rebuild} disabled={loading}>Rebuild Activity</button></article>
-      <article className="activity-admin-card danger"><h3>Reset current week</h3><p>Archive a snapshot first, then clear this week's activity.</p><button className="secondary-btn" onClick={reset} disabled={loading}>Reset Week</button></article>
+      <article className="activity-admin-card">
+        <h3>Rebuild activity</h3>
+        <p>Re-scan recent Discord history and rebuild stored records.</p>
+        <button className="primary-btn" onClick={rebuild} disabled={loading}>
+          Rebuild Activity
+        </button>
+      </article>
+
+      <article className="activity-admin-card danger">
+        <h3>Reset current week</h3>
+        <p>Archive a snapshot first, then clear this week's activity.</p>
+        <button className="secondary-btn" onClick={reset} disabled={loading}>
+          Reset Week
+        </button>
+      </article>
     </div>
 
     <SectionHead kicker="ARCHIVE" title="Recent snapshots." text="Manual reset snapshots are preserved here."/>
-    <div className="activity-archive-list">{(data.recentArchives||[]).length?data.recentArchives.map(item=><article key={item.id}><div><strong>{item.messageCount} messages</strong><span>{item.reason} • @{item.archivedBy}</span></div><span>{formatDate(item.archivedAt)}</span></article>):<Empty icon={Archive} title="No snapshots yet" text="Snapshots appear after a manual reset."/>}</div>
+
+    <div className="activity-archive-list">
+      {(data.recentArchives||[]).length
+        ? data.recentArchives.map(item=>
+            <article key={item.id}>
+              <div>
+                <strong>{item.messageCount} messages</strong>
+                <span>{item.reason} • @{item.archivedBy}</span>
+              </div>
+              <span>{formatDate(item.archivedAt)}</span>
+            </article>
+          )
+        : <Empty icon={Archive} title="No snapshots yet" text="Snapshots appear after a manual reset."/>
+      }
+    </div>
   </div>;
 }
 
