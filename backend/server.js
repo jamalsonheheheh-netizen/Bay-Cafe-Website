@@ -726,7 +726,137 @@ async function trackedGuild(){
 
   return null;
 }
-async function backfillDiscord(){const guild=await trackedGuild();if(!guild){console.warn("[Bay Café] No Discord guild available for tracking.");return;}const channels=await guild.channels.fetch();const eligible=[...channels.values()].filter(ch=>ch?.isTextBased?.()&&!ch.isThread?.()&&!EXCLUDED_CHANNEL_IDS.has(String(ch.id))&&(!TRACK_CHANNEL_IDS.size||TRACK_CHANNEL_IDS.has(String(ch.id))));for(const ch of eligible){if(!ch?.messages?.fetch)continue;const messages=await fetchRecentMessages(ch,500).catch(()=>[]);for(const message of [...messages].reverse())await persistDiscordMessage(message);}}
+let activitySyncRunning=false;
+let activityLastSyncedAt=null;
+
+async function fetchMessagesSince(channel,since,limit=5000){
+  const collected=[];
+  let before=null;
+  let reachedBoundary=false;
+
+  while(collected.length<limit&&!reachedBoundary){
+    const batch=await channel.messages.fetch({
+      limit:100,
+      ...(before?{before}:{})
+    }).catch(()=>null);
+
+    if(!batch||!batch.size)break;
+
+    const values=[...batch.values()];
+    before=values[values.length-1]?.id||null;
+
+    for(const message of values){
+      if(message.createdAt<since){
+        reachedBoundary=true;
+        continue;
+      }
+
+      collected.push(message);
+
+      if(collected.length>=limit){
+        break;
+      }
+    }
+
+    if(batch.size<100)break;
+  }
+
+  return collected;
+}
+
+async function syncDiscordCurrentWeek({reason="scheduled"}={}){
+  if(activitySyncRunning)return {skipped:true,reason:"already-running"};
+
+  activitySyncRunning=true;
+
+  try{
+    const guild=await trackedGuild();
+
+    if(!guild){
+      throw new Error("Discord guild is unavailable.");
+    }
+
+    const weekStart=startOfCurrentWeek();
+    const channels=await guild.channels.fetch();
+
+    const eligible=[...channels.values()].filter(
+      channel=>
+        channel?.isTextBased?.()&&
+        !channel.isThread?.()&&
+        !EXCLUDED_CHANNEL_IDS.has(String(channel.id))&&
+        (!TRACK_CHANNEL_IDS.size||TRACK_CHANNEL_IDS.has(String(channel.id)))
+    );
+
+    const stored=readJson(FILES.discordMessages,[]);
+    const merged=new Map(stored.map(item=>[String(item.id),item]));
+
+    let scanned=0;
+    let addedOrUpdated=0;
+
+    for(const channel of eligible){
+      if(!channel?.messages?.fetch)continue;
+
+      const messages=await fetchMessagesSince(channel,weekStart,5000).catch(error=>{
+        console.warn(`[Bay Café] Weekly activity sync skipped #${channel.name||channel.id}: ${error.message}`);
+        return [];
+      });
+
+      scanned+=messages.length;
+
+      for(const message of messages){
+        if(!shouldTrackMessage(message))continue;
+
+        const record=discordRecord(message);
+        const previous=merged.get(String(record.id));
+
+        if(
+          !previous||
+          previous.content!==record.content||
+          previous.channelName!==record.channelName
+        ){
+          addedOrUpdated++;
+        }
+
+        merged.set(String(record.id),record);
+      }
+    }
+
+    const sorted=[...merged.values()]
+      .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))
+      .slice(0,30000);
+
+    writeJson(FILES.discordMessages,sorted);
+
+    activityLastSyncedAt=new Date().toISOString();
+
+    broadcast("activity:sync",{
+      reason,
+      weekStart:weekStart.toISOString(),
+      scanned,
+      addedOrUpdated,
+      totalStored:sorted.length,
+      syncedAt:activityLastSyncedAt
+    });
+
+    console.log(
+      `[Bay Café] Activity sync (${reason}) completed: ${scanned} current-week messages scanned, ${addedOrUpdated} added/updated.`
+    );
+
+    return {
+      success:true,
+      scanned,
+      addedOrUpdated,
+      totalStored:sorted.length,
+      syncedAt:activityLastSyncedAt
+    };
+  }finally{
+    activitySyncRunning=false;
+  }
+}
+
+async function backfillDiscord(){
+  return syncDiscordCurrentWeek({reason:"startup"});
+}
 
 
 const DEFAULT_ACTIVITY_SETTINGS={
@@ -980,6 +1110,11 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
       totalTracked:all.length,
       thisWeekTracked:thisWeek.length,
       settings,
+      sync:{
+        lastSyncedAt:activityLastSyncedAt,
+        running:activitySyncRunning,
+        intervalSeconds:60
+      },
       members,
       teamTotals:{
         Corporate:members.filter(item=>item.team==="Corporate").length,
@@ -1023,6 +1158,25 @@ app.put("/api/activity/settings",auth,(req,res)=>{
   broadcast("activity:settings",settings);
   res.json({success:true,settings});
 });
+app.post("/api/activity/sync",auth,async(req,res)=>{
+  if(!isLeadershipOrOwnership(req.user)){
+    return res.status(403).json({
+      success:false,
+      message:"Leadership or Ownership access required."
+    });
+  }
+
+  try{
+    const result=await syncDiscordCurrentWeek({reason:"manual"});
+    res.json({success:true,...result});
+  }catch(error){
+    res.status(400).json({
+      success:false,
+      message:error.message||"Unable to sync current-week Discord activity."
+    });
+  }
+});
+
 app.post("/api/activity/rebuild",auth,async(req,res)=>{if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});try{const messageCount=await rebuildDiscordHistory();res.json({success:true,messageCount});}catch(error){res.status(400).json({success:false,message:error.message||"Unable to rebuild activity."});}});
 app.post("/api/activity/reset",auth,(req,res)=>{if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});archiveCurrentActivity("manual reset",req.user);const weekStart=startOfCurrentWeek();const all=readJson(FILES.discordMessages,[]);writeJson(FILES.discordMessages,all.filter(item=>new Date(item.createdAt)<weekStart));broadcast("activity:reset",{weekStart:weekStart.toISOString()});res.json({success:true});});
 
@@ -1508,7 +1662,14 @@ async function startDiscord(){if(!DISCORD_BOT_TOKEN){console.warn("[Bay Café] D
           ? visibleGuilds.map(g=>`${g.name} (${g.id})`).join(", ")
           : "NONE"
       }`
-    );await backfillDiscord().catch(e=>console.error(`[Bay Café] Discord backfill failed: ${e.message}`));});discordClient.on("messageCreate",async message=>{if(!message.guildId)return;const guild=await trackedGuild();if(guild&&message.guildId!==guild.id)return;const tickets=readJson(FILES.tickets,[]),ticket=tickets.find(x=>x.status==="open"&&String(x.discordThreadId||"")===String(message.channelId));if(ticket&&message.channel?.isThread?.()&&!message.author?.bot){const content=String(message.content||"").trim(),attachmentText=message.attachments?.size?[...message.attachments.values()].map(x=>x.url).join("\n"):"",merged=[content,attachmentText].filter(Boolean).join("\n").slice(0,1800);if(merged){ticket.messages??=[];ticket.messages.push({id:`discord-${message.id}`,authorType:"staff",authorId:message.author.id,authorDisplayName:message.member?.displayName||message.author.globalName||message.author.username,authorUsername:message.author.username,content:merged,createdAt:message.createdAt.toISOString(),source:"discord"});ticket.updatedAt=new Date().toISOString();writeJson(FILES.tickets,tickets);broadcast("ticket:update",publicTicket(ticket));}return;}await persistDiscordMessage(message).catch(e=>console.error(`[Bay Café] Discord message tracking failed: ${e.message}`));});discordClient.on("messageUpdate",async(_old,newMessage)=>{const full=newMessage.partial?await newMessage.fetch().catch(()=>null):newMessage;if(full)await persistDiscordMessage(full).catch(()=>null);});discordClient.on("messageDelete",async message=>removeDiscordMessage(message.id));await discordClient.login(DISCORD_BOT_TOKEN);}
+    );
+    await backfillDiscord().catch(e=>console.error(`[Bay Café] Discord backfill failed: ${e.message}`));
+
+    setInterval(()=>{
+      syncDiscordCurrentWeek({reason:"scheduled"})
+        .catch(e=>console.error(`[Bay Café] Scheduled activity sync failed: ${e.message}`));
+    },60_000);
+  });discordClient.on("messageCreate",async message=>{if(!message.guildId)return;const guild=await trackedGuild();if(guild&&message.guildId!==guild.id)return;const tickets=readJson(FILES.tickets,[]),ticket=tickets.find(x=>x.status==="open"&&String(x.discordThreadId||"")===String(message.channelId));if(ticket&&message.channel?.isThread?.()&&!message.author?.bot){const content=String(message.content||"").trim(),attachmentText=message.attachments?.size?[...message.attachments.values()].map(x=>x.url).join("\n"):"",merged=[content,attachmentText].filter(Boolean).join("\n").slice(0,1800);if(merged){ticket.messages??=[];ticket.messages.push({id:`discord-${message.id}`,authorType:"staff",authorId:message.author.id,authorDisplayName:message.member?.displayName||message.author.globalName||message.author.username,authorUsername:message.author.username,content:merged,createdAt:message.createdAt.toISOString(),source:"discord"});ticket.updatedAt=new Date().toISOString();writeJson(FILES.tickets,tickets);broadcast("ticket:update",publicTicket(ticket));}return;}await persistDiscordMessage(message).catch(e=>console.error(`[Bay Café] Discord message tracking failed: ${e.message}`));});discordClient.on("messageUpdate",async(_old,newMessage)=>{const full=newMessage.partial?await newMessage.fetch().catch(()=>null):newMessage;if(full)await persistDiscordMessage(full).catch(()=>null);});discordClient.on("messageDelete",async message=>removeDiscordMessage(message.id));await discordClient.login(DISCORD_BOT_TOKEN);}
 
 app.get("/api/health",(_req,res)=>res.json({
   success:true,

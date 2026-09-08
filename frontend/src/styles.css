@@ -1288,3 +1288,27 @@
     grid-row:1;
   }
 }
+
+
+/* V34 — near-live persistent Monday activity synchronization */
+.activity-admin-stats{
+  grid-template-columns:repeat(4,minmax(0,1fr));
+}
+
+.activity-sync-actions{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+
+@media(max-width:1050px){
+  .activity-admin-stats,
+  .activity-sync-actions{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
+
+@media(max-width:700px){
+  .activity-admin-stats,
+  .activity-sync-actions{
+    grid-template-columns:1fr;
+  }
+}

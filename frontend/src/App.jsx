@@ -1733,6 +1733,12 @@ function ActivityAdminPage({token,setToast}){
 
   useEffect(()=>{
     load().catch(error=>setToast(error.message));
+
+    const interval=setInterval(()=>{
+      load().catch(()=>{});
+    },10_000);
+
+    return()=>clearInterval(interval);
   },[token]);
 
   const save=async()=>{
@@ -1750,6 +1756,19 @@ function ActivityAdminPage({token,setToast}){
         token
       );
       setToast("Rank activity requirements updated.");
+      await load();
+    }catch(error){
+      setToast(error.message);
+    }finally{
+      setLoading(false);
+    }
+  };
+
+  const syncNow=async()=>{
+    setLoading(true);
+    try{
+      const result=await api("/api/activity/sync",{method:"POST"},token);
+      setToast(`Synced ${result.scanned||0} messages from this week.`);
       await load();
     }catch(error){
       setToast(error.message);
@@ -1806,14 +1825,19 @@ function ActivityAdminPage({token,setToast}){
     <SectionHead
       kicker="LEADERSHIP / OWNERSHIP"
       title="Activity Management."
-      text="See every tracked member in Corporate, Management, and Directing, including their weekly message count and the messages they sent."
-      right={<Badge tone="green">PRIVATE</Badge>}
+      text="See every tracked member in Corporate, Management, and Directing. New Discord messages are captured live, the current week is reconciled every 60 seconds, and this page refreshes every 10 seconds."
+      right={<Badge tone="green">LIVE TRACKING</Badge>}
     />
 
     <div className="activity-admin-stats">
       <article><span>THIS WEEK</span><strong>{data.thisWeekTracked}</strong><small>tracked messages</small></article>
       <article><span>MEMBERS</span><strong>{(data.members||[]).length}</strong><small>across tracked teams</small></article>
       <article><span>TOTAL STORED</span><strong>{data.totalTracked}</strong><small>persistent records</small></article>
+      <article>
+        <span>LAST SYNC</span>
+        <strong>{data.sync?.running?"SYNCING":"LIVE"}</strong>
+        <small>{data.sync?.lastSyncedAt?formatDate(data.sync.lastSyncedAt):"startup sync pending"}</small>
+      </article>
     </div>
 
     <section className="activity-roster-section">
@@ -1943,7 +1967,15 @@ function ActivityAdminPage({token,setToast}){
       </button>
     </article>
 
-    <div className="activity-admin-grid two">
+    <div className="activity-admin-grid activity-sync-actions">
+      <article className="activity-admin-card">
+        <h3>Sync from Monday</h3>
+        <p>Immediately scan Discord from the most recent Monday through right now and merge anything the live tracker may have missed.</p>
+        <button className="primary-btn" onClick={syncNow} disabled={loading}>
+          Sync This Week
+        </button>
+      </article>
+
       <article className="activity-admin-card">
         <h3>Rebuild activity</h3>
         <p>Re-scan recent Discord history and rebuild stored records.</p>
