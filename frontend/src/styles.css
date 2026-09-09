@@ -2364,3 +2364,68 @@
     display:inline;
   }
 }
+
+
+/* V53 — remembered staff device + community return */
+.community-auth-actions{
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.community-remembered-user{
+  min-height:36px;
+  padding:4px 10px 4px 5px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:10px;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  background:rgba(255,255,255,.025);
+  color:#dff9fb;
+  font-size:9px;
+  font-weight:700;
+}
+
+.community-remembered-user:hover{
+  background:rgba(255,255,255,.05);
+}
+
+.community-remembered-user img{
+  width:26px;
+  height:26px;
+  border-radius:7px;
+  object-fit:cover;
+}
+
+.sidebar-links .sidebar-community-link{
+  width:100%;
+  padding:8px 3px;
+  border:0;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  background:transparent;
+  color:#83a9b4;
+  font-size:9px;
+  text-align:left;
+}
+
+.sidebar-links .sidebar-community-link:hover{
+  color:#dff9fb;
+}
+
+@media(max-width:900px){
+  .community-auth-actions{
+    gap:5px;
+  }
+
+  .community-remembered-user span{
+    display:none;
+  }
+
+  .community-remembered-user{
+    padding:4px;
+  }
+}

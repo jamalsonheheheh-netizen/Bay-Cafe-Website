@@ -96,6 +96,13 @@ function useSession(){
 
   const[checking,setChecking]=useState(Boolean(token));
 
+  const clearSavedSession=()=>{
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    setToken("");
+    setUser(null);
+  };
+
   useEffect(()=>{
     if(!token){
       setChecking(false);
@@ -108,17 +115,27 @@ function useSession(){
       .then(result=>{
         if(cancelled)return;
 
+        const activeToken=result.token||token;
+
+        if(activeToken!==token){
+          localStorage.setItem(TOKEN_KEY,activeToken);
+          setToken(activeToken);
+        }
+
         setUser(result.user);
         localStorage.setItem(
           USER_KEY,
           JSON.stringify(result.user)
         );
       })
-      .catch(()=>{
-        /*
-         * Keep the saved browser login during temporary backend/API
-         * failures. Only the Sign out button clears the local session.
-         */
+      .catch(error=>{
+        if(cancelled)return;
+
+        // A real expired/invalid session should be removed. Temporary
+        // Railway/network failures should not erase the remembered device.
+        if(error?.status===401){
+          clearSavedSession();
+        }
       })
       .finally(()=>{
         if(!cancelled){
@@ -128,6 +145,71 @@ function useSession(){
 
     return()=>{
       cancelled=true;
+    };
+  },[token]);
+
+  // Sliding 7-day login: actual interaction with the site refreshes the
+  // server-side last-active timestamp. Background tabs alone do not.
+  useEffect(()=>{
+    if(!token)return;
+
+    let lastTouch=0;
+    let timer=null;
+
+    const touch=()=>{
+      const now=Date.now();
+
+      if(now-lastTouch<4*60*1000){
+        return;
+      }
+
+      lastTouch=now;
+
+      clearTimeout(timer);
+      timer=setTimeout(()=>{
+        api(
+          "/api/auth/touch",
+          {method:"POST"},
+          token
+        ).catch(error=>{
+          if(error?.status===401){
+            clearSavedSession();
+          }
+        });
+      },700);
+    };
+
+    const events=["pointerdown","keydown","touchstart","scroll"];
+    events.forEach(name=>
+      window.addEventListener(
+        name,
+        touch,
+        {passive:true}
+      )
+    );
+
+    const visibility=()=>{
+      if(document.visibilityState==="visible"){
+        touch();
+      }
+    };
+
+    document.addEventListener(
+      "visibilitychange",
+      visibility
+    );
+
+    touch();
+
+    return()=>{
+      clearTimeout(timer);
+      events.forEach(name=>
+        window.removeEventListener(name,touch)
+      );
+      document.removeEventListener(
+        "visibilitychange",
+        visibility
+      );
     };
   },[token]);
 
@@ -157,11 +239,7 @@ function useSession(){
       }
     }catch{}
 
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-
-    setToken("");
-    setUser(null);
+    clearSavedSession();
   };
 
   return{
@@ -404,7 +482,7 @@ const Badge=({children,tone="aqua"})=><span className={`badge ${tone}`}>{childre
 function SectionHead({kicker,title,text,right}){return <div className="section-head"><div><span className="eyebrow">{kicker}</span><h2>{title}</h2>{text&&<p>{text}</p>}</div>{right}</div>;}
 function Empty({icon:Icon,title,text}){return <div className="empty-state"><div className="empty-icon"><Icon size={20}/></div><strong>{title}</strong><p>{text}</p></div>;}
 
-function CommunityDashboard({onStaffLogin}){
+function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
   const[page,setPage]=useState("home");
   const[announcements,setAnnouncements]=useState([]);
   const[careers,setCareers]=useState([]);
@@ -473,10 +551,23 @@ function CommunityDashboard({onStaffLogin}){
         })}
       </nav>
 
-      <button className="community-staff-login" onClick={onStaffLogin}>
-        <ShieldCheck size={14}/>
-        Staff Login
-      </button>
+      <div className="community-auth-actions">
+        {rememberedUser&&
+          <button
+            className="community-remembered-user"
+            onClick={onRememberedStaff}
+            title={`Return to ${rememberedUser.username}'s Staff Hub`}
+          >
+            <img src={rememberedUser.avatar} alt=""/>
+            <span>Are you {rememberedUser.username}?</span>
+          </button>
+        }
+
+        <button className="community-staff-login" onClick={onStaffLogin}>
+          <ShieldCheck size={14}/>
+          Staff Login
+        </button>
+      </div>
     </header>
 
     <div className="community-page">
@@ -778,7 +869,7 @@ function CommunityDashboard({onStaffLogin}){
     </div>
   </main>;
 }
-function Dashboard({token,user,onLogout}){
+function Dashboard({token,user,onLogout,onCommunity}){
   const[page,setPage]=useState("overview");
   const[mobileOpen,setMobileOpen]=useState(false);
   const[stats,setStats]=useState(null);
@@ -1052,6 +1143,9 @@ function Dashboard({token,user,onLogout}){
       </nav>
 
       <div className="sidebar-links">
+        <button className="sidebar-community-link" onClick={onCommunity}>
+          Community<ChevronRight size={13}/>
+        </button>
         <a href="https://discord.gg/ztPy6UKxY" target="_blank" rel="noreferrer">
           Public Discord<ExternalLink size={13}/>
         </a>
@@ -2466,8 +2560,12 @@ export default function App(){
     return <StaffEntryTransition user={transitionUser||session.user}/>;
   }
 
-  if(communityOpen&&!session.user){
-    return <CommunityDashboard onStaffLogin={()=>setCommunityOpen(false)}/>;
+  if(communityOpen){
+    return <CommunityDashboard
+      rememberedUser={session.user}
+      onRememberedStaff={()=>setCommunityOpen(false)}
+      onStaffLogin={()=>setCommunityOpen(false)}
+    />;
   }
 
   if(!session.user){
@@ -2482,5 +2580,6 @@ export default function App(){
     token={session.token}
     user={session.user}
     onLogout={session.logout}
+    onCommunity={()=>setCommunityOpen(true)}
   />;
 }

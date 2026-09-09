@@ -29,7 +29,7 @@ app.use(cors({origin(origin,cb){if(!origin)return cb(null,true);const clean=orig
 app.use(express.json({limit:"1mb"}));
 fs.mkdirSync(DATA_DIRECTORY,{recursive:true});
 
-const FILES={discordMessages:path.join(DATA_DIRECTORY,"discord-messages.json"),tickets:path.join(DATA_DIRECTORY,"tickets.json"),applications:path.join(DATA_DIRECTORY,"applications.json"),applicationSubmissions:path.join(DATA_DIRECTORY,"application-submissions.json"),activitySettings:path.join(DATA_DIRECTORY,"activity-settings.json"),activityArchive:path.join(DATA_DIRECTORY,"activity-archive.json"),birthdays:path.join(DATA_DIRECTORY,"birthdays.json"),staffDirectory:path.join(DATA_DIRECTORY,"staff-directory.json")};
+const FILES={discordMessages:path.join(DATA_DIRECTORY,"discord-messages.json"),tickets:path.join(DATA_DIRECTORY,"tickets.json"),applications:path.join(DATA_DIRECTORY,"applications.json"),applicationSubmissions:path.join(DATA_DIRECTORY,"application-submissions.json"),activitySettings:path.join(DATA_DIRECTORY,"activity-settings.json"),activityArchive:path.join(DATA_DIRECTORY,"activity-archive.json"),birthdays:path.join(DATA_DIRECTORY,"birthdays.json"),staffDirectory:path.join(DATA_DIRECTORY,"staff-directory.json"),sessions:path.join(DATA_DIRECTORY,"sessions.json")};
 function readJson(file,fallback){try{if(!fs.existsSync(file))return fallback;const raw=fs.readFileSync(file,"utf8");return raw?JSON.parse(raw):fallback;}catch{return fallback;}}
 function writeJson(file,value){const temp=`${file}.tmp`;fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(temp,JSON.stringify(value,null,2));fs.renameSync(temp,file);}
 
@@ -496,10 +496,143 @@ async function buildWebsiteUser(username,{allowGuest=false}={}){
 }
 
 const SESSION_SECRET=String(process.env.SESSION_SIGNING_SECRET||process.env.DISCORD_BOT_TOKEN||"bay-cafe-local-development-only");
+const SESSION_IDLE_MS=7*24*60*60*1000;
+const SESSION_TOUCH_WRITE_MS=5*60*1000;
 const sign=value=>crypto.createHmac("sha256",SESSION_SECRET).update(value).digest("base64url");
-function createSessionToken(user){const payload=Buffer.from(JSON.stringify({v:1,issuedAt:Date.now(),nonce:crypto.randomUUID(),user})).toString("base64url");return `bay1.${payload}.${sign(payload)}`;}
-function verifySessionToken(token){const p=String(token||"").split(".");if(p.length!==3||p[0]!=="bay1")return null;const left=Buffer.from(p[2]),right=Buffer.from(sign(p[1]));if(left.length!==right.length||!crypto.timingSafeEqual(left,right))return null;try{return JSON.parse(Buffer.from(p[1],"base64url").toString("utf8")).user||null;}catch{return null;}}
-function auth(req,res,next){const h=String(req.headers.authorization||"");const token=h.startsWith("Bearer ")?h.slice(7).trim():"";const user=verifySessionToken(token);if(!user)return res.status(401).json({success:false,message:"Sign in required."});req.user=user;req.sessionToken=token;next();}
+
+function safeSignatureMatches(value,signature){
+  try{
+    const left=Buffer.from(String(signature||""));
+    const right=Buffer.from(sign(value));
+    return left.length===right.length&&crypto.timingSafeEqual(left,right);
+  }catch{
+    return false;
+  }
+}
+
+function readSessions(){
+  const sessions=readJson(FILES.sessions,{});
+  return sessions&&typeof sessions==="object"&&!Array.isArray(sessions)
+    ? sessions
+    : {};
+}
+
+function saveSessions(sessions){
+  writeJson(FILES.sessions,sessions);
+}
+
+function createSessionToken(user){
+  const sessionId=crypto.randomUUID();
+  const now=Date.now();
+  const sessions=readSessions();
+
+  sessions[sessionId]={
+    user,
+    createdAt:now,
+    lastActiveAt:now
+  };
+
+  saveSessions(sessions);
+  return `bay2.${sessionId}.${sign(sessionId)}`;
+}
+
+function readSessionToken(token,{touch=false}={}){
+  const p=String(token||"").split(".");
+  const now=Date.now();
+
+  if(p.length!==3){
+    return null;
+  }
+
+  if(p[0]==="bay2"){
+    const sessionId=p[1];
+
+    if(!safeSignatureMatches(sessionId,p[2])){
+      return null;
+    }
+
+    const sessions=readSessions();
+    const record=sessions[sessionId];
+
+    if(!record?.user){
+      return null;
+    }
+
+    const lastActiveAt=Number(record.lastActiveAt||record.createdAt||0);
+
+    if(!lastActiveAt||now-lastActiveAt>SESSION_IDLE_MS){
+      delete sessions[sessionId];
+      saveSessions(sessions);
+      return null;
+    }
+
+    if(touch&&now-lastActiveAt>=SESSION_TOUCH_WRITE_MS){
+      record.lastActiveAt=now;
+      sessions[sessionId]=record;
+      saveSessions(sessions);
+    }
+
+    return {
+      user:record.user,
+      sessionId,
+      legacy:false,
+      lastActiveAt:Number(record.lastActiveAt||lastActiveAt)
+    };
+  }
+
+  // Allow recent V51/V52 browser sessions to migrate once instead of
+  // forcing everyone to verify again immediately after this update.
+  if(p[0]==="bay1"&&safeSignatureMatches(p[1],p[2])){
+    try{
+      const payload=JSON.parse(
+        Buffer.from(p[1],"base64url").toString("utf8")
+      );
+
+      const issuedAt=Number(payload?.issuedAt||0);
+
+      if(
+        !payload?.user||
+        !issuedAt||
+        now-issuedAt>SESSION_IDLE_MS
+      ){
+        return null;
+      }
+
+      return {
+        user:payload.user,
+        sessionId:null,
+        legacy:true,
+        lastActiveAt:issuedAt
+      };
+    }catch{
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function verifySessionToken(token){
+  return readSessionToken(token)?.user||null;
+}
+
+function auth(req,res,next){
+  const h=String(req.headers.authorization||"");
+  const token=h.startsWith("Bearer ")?h.slice(7).trim():"";
+  const session=readSessionToken(token,{touch:true});
+
+  if(!session?.user){
+    return res.status(401).json({
+      success:false,
+      message:"Your saved login expired. Please sign in again."
+    });
+  }
+
+  req.user=session.user;
+  req.sessionToken=token;
+  req.session=session;
+  next();
+}
 
 const authChallenges=new Map();
 
@@ -586,8 +719,39 @@ app.post("/api/auth/verify",async(req,res)=>{
     res.status(400).json({success:false,message:error.message||"Unable to finish sign in."});
   }
 });
-app.get("/api/auth/me",auth,(req,res)=>res.json({success:true,user:req.user,persistent:true}));
-app.post("/api/auth/logout",auth,(_req,res)=>res.json({success:true}));
+app.get("/api/auth/me",auth,(req,res)=>{
+  let token=null;
+
+  if(req.session?.legacy){
+    token=createSessionToken(req.user);
+  }
+
+  res.json({
+    success:true,
+    user:req.user,
+    persistent:true,
+    token,
+    idleTimeoutDays:7
+  });
+});
+
+app.post("/api/auth/touch",auth,(req,res)=>{
+  res.json({
+    success:true,
+    active:true,
+    idleTimeoutDays:7
+  });
+});
+
+app.post("/api/auth/logout",auth,(req,res)=>{
+  if(req.session?.sessionId){
+    const sessions=readSessions();
+    delete sessions[req.session.sessionId];
+    saveSessions(sessions);
+  }
+
+  res.json({success:true});
+});
 
 app.get("/api/stats",auth,async(_req,res)=>{const [g,i]=await Promise.allSettled([groupInfo(),groupIcon()]);const group=g.status==="fulfilled"?g.value:null;const icon=i.status==="fulfilled"?i.value:"";res.json({success:true,group:{id:GROUP_ID,name:group?.name||"Bay Café",description:group?.description||"",memberCount:group?.memberCount||0,owner:group?.owner||null,icon,url:"https://www.roblox.com/communities/695410048/Bay-Cafe#!/about"},discord:{connected:Boolean(discordClient?.isReady()),trackedMessages:readJson(FILES.discordMessages,[]).length,trackedChannels:TRACK_CHANNEL_IDS.size||null}});});
 
