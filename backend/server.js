@@ -528,7 +528,7 @@ app.post("/api/auth/start",async(req,res)=>{
       user,
       code,
       mode,
-      expiresAt:Date.now()+20*60*1000
+      expiresAt:Date.now()+10*60*1000
     });
 
     res.json({
