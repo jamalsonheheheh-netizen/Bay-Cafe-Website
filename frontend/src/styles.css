@@ -1761,3 +1761,253 @@
 .about-visual-strip{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:12px}.about-visual-strip img{width:100%;height:190px;object-fit:cover;border-radius:16px;border:1px solid var(--line)}
 @media(max-width:1000px){.community-hero-rich{grid-template-columns:1fr}.community-feature-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:700px){.community-feature-grid,.about-visual-strip{grid-template-columns:1fr}.community-color-banner{flex-direction:column;align-items:flex-start}.community-hero-art,.community-hero-art>img{min-height:240px}}
+
+
+/* V37 — official About page + richer staff hub */
+.official-about-hero{
+  padding:22px;
+  border:1px solid var(--line);
+  border-radius:22px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(320px,.8fr);
+  gap:22px;
+  align-items:center;
+  background:
+    radial-gradient(circle at 8% 15%,rgba(92,219,236,.12),transparent 30%),
+    linear-gradient(145deg,rgba(8,52,67,.94),rgba(7,34,45,.94));
+}
+
+.official-about-copy h2{
+  margin:12px 0 0;
+  font-size:30px;
+}
+
+.official-about-copy p{
+  margin:12px 0 0;
+  max-width:700px;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.75;
+}
+
+.official-about-hero>img{
+  width:100%;
+  height:280px;
+  object-fit:cover;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.08);
+}
+
+.official-link-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:18px;
+}
+
+.official-link-row a,
+.handbook-actions a{
+  min-height:38px;
+  padding:0 12px;
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:10px;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  background:rgba(255,255,255,.035);
+  color:#dff9fc;
+  text-decoration:none;
+  font-size:8px;
+  font-weight:800;
+}
+
+.official-about-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:14px;
+}
+
+.official-about-card{
+  padding:20px;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:rgba(7,38,50,.72);
+}
+
+.support-card{background:linear-gradient(160deg,rgba(16,88,105,.25),rgba(7,38,50,.82))}
+.rules-card{background:linear-gradient(160deg,rgba(74,91,152,.18),rgba(7,38,50,.82))}
+.alliance-card{background:linear-gradient(160deg,rgba(158,112,61,.16),rgba(7,38,50,.82))}
+
+.official-card-icon{
+  width:38px;
+  height:38px;
+  margin-bottom:14px;
+  border-radius:11px;
+  display:grid;
+  place-items:center;
+  background:rgba(255,255,255,.045);
+  color:#84dfe8;
+}
+
+.rules-card .official-card-icon{color:#b9c9ff}
+.alliance-card .official-card-icon{color:#efcb84}
+
+.official-about-card h3{
+  margin:8px 0 0;
+  font-size:16px;
+}
+
+.official-about-card p,
+.official-about-card li{
+  color:var(--muted);
+  font-size:9px;
+  line-height:1.65;
+}
+
+.official-about-card ol,
+.official-about-card ul{
+  margin:13px 0 0;
+  padding-left:18px;
+}
+
+.official-about-card li+li{
+  margin-top:7px;
+}
+
+.official-about-card strong{
+  color:#edfaff;
+}
+
+.handbook-links{
+  padding:20px;
+  border:1px solid var(--line);
+  border-radius:18px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  background:linear-gradient(120deg,rgba(10,83,105,.75),rgba(61,69,120,.55),rgba(128,85,94,.45));
+}
+
+.handbook-links h2{
+  margin:7px 0 0;
+  font-size:20px;
+}
+
+.handbook-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+.staff-hero-rich{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(240px,.72fr);
+  gap:18px;
+  align-items:center;
+}
+
+.staff-hero-visual{
+  position:relative;
+  min-height:245px;
+}
+
+.staff-hero-visual img{
+  width:100%;
+  height:245px;
+  object-fit:cover;
+  border-radius:20px;
+  border:1px solid rgba(255,255,255,.07);
+}
+
+.staff-hero-floating{
+  position:absolute;
+  right:12px;
+  bottom:12px;
+  padding:8px 10px;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  background:rgba(4,29,39,.8);
+  color:#effcff;
+  font-size:8px;
+  font-weight:800;
+  backdrop-filter:blur(10px);
+}
+
+.staff-visual-shortcuts{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+}
+
+.staff-shortcut{
+  padding:0;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:16px;
+  text-align:left;
+  background:rgba(7,38,50,.72);
+  color:#fff;
+}
+
+.staff-shortcut img{
+  width:100%;
+  height:110px;
+  object-fit:cover;
+  display:block;
+}
+
+.staff-shortcut>div{
+  padding:13px;
+}
+
+.staff-shortcut svg{
+  margin-bottom:8px;
+  color:#85dce9;
+}
+
+.staff-shortcut strong,
+.staff-shortcut span{
+  display:block;
+}
+
+.staff-shortcut strong{
+  font-size:10px;
+}
+
+.staff-shortcut span{
+  margin-top:4px;
+  color:var(--muted);
+  font-size:8px;
+  line-height:1.5;
+}
+
+.shortcut-careers{background:linear-gradient(180deg,rgba(18,113,112,.15),rgba(7,38,50,.78))}
+.shortcut-info{background:linear-gradient(180deg,rgba(91,78,145,.13),rgba(7,38,50,.78))}
+
+@media(max-width:980px){
+  .official-about-hero,
+  .staff-hero-rich{
+    grid-template-columns:1fr;
+  }
+
+  .official-about-grid,
+  .staff-visual-shortcuts{
+    grid-template-columns:1fr 1fr;
+  }
+}
+
+@media(max-width:700px){
+  .official-about-grid,
+  .staff-visual-shortcuts{
+    grid-template-columns:1fr;
+  }
+
+  .handbook-links{
+    flex-direction:column;
+    align-items:flex-start;
+  }
+}

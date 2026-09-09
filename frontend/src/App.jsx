@@ -657,33 +657,114 @@ function CommunityDashboard({onStaffLogin}){
           <SectionHead
             kicker="ABOUT US"
             title="Welcome to Bay Café."
-            text="A Roblox café community centered around service, leadership, development, and a place people enjoy returning to."
+            text="A new, upcoming game and relaxing seaside experience where good vibes meet great drinks."
           />
+
+          <section className="official-about-hero">
+            <div className="official-about-copy">
+              <Badge tone="green">OFFICIAL BAY CAFÉ INFORMATION</Badge>
+              <h2>Sip. Relax. Enjoy The Bay.</h2>
+              <p>
+                At Bay Café, we serve delicious coffees, tasty treats, and chill moments with friends.
+                Whether you're here to work, hang out, or enjoy the view, there is always a spot for you.
+              </p>
+
+              <div className="official-link-row">
+                <a href="https://www.youtube.com/@OfficialBayCafe" target="_blank" rel="noreferrer">
+                  YouTube<ExternalLink size={13}/>
+                </a>
+                <a href="https://www.tiktok.com/@baycafe_roblox?_r=1&_t=ZS-96LNRkRrvRV" target="_blank" rel="noreferrer">
+                  TikTok<ExternalLink size={13}/>
+                </a>
+                <a href="https://www.roblox.com/share/g/695410048" target="_blank" rel="noreferrer">
+                  Roblox Group<ExternalLink size={13}/>
+                </a>
+              </div>
+            </div>
+
+            <img src={bayHeroArt} alt="Bay Café seaside"/>
+          </section>
+
           <div className="about-visual-strip">
             <img src={bayHeroArt} alt="Bay Café coast"/>
             <img src={communityArt} alt="Bay Café community"/>
             <img src={sunsetArt} alt="Bay Café sunset"/>
           </div>
 
-          <div className="community-info-grid">
-            <article>
-              <Coffee size={19}/>
-              <h3>Community First</h3>
-              <p>Meet people, participate, grow, and enjoy the Bay Café community.</p>
+          <section className="official-about-grid">
+            <article className="official-about-card support-card">
+              <div className="official-card-icon"><LifeBuoy size={20}/></div>
+              <span className="eyebrow">SUPPORT INFORMATION</span>
+              <h3>Help whenever you need it.</h3>
+              <p>
+                Whether you're looking for a partnership, need to report a player, require general
+                assistance, have staffing-related inquiries, or need help with any Bay Café matter,
+                our Support Team is here to assist you.
+              </p>
+              <p>
+                Our ticket system is available 24/7. Please use the correct ticket category and provide
+                clear, detailed information so the appropriate department can respond efficiently.
+              </p>
+              <p>
+                Human Resources, Operations, and support staff are committed to providing a professional,
+                friendly, and efficient experience for every member of the community.
+              </p>
             </article>
 
-            <article>
-              <BriefcaseBusiness size={19}/>
-              <h3>Grow With Us</h3>
-              <p>Explore Careers whenever new opportunities are open.</p>
+            <article className="official-about-card rules-card">
+              <div className="official-card-icon"><ShieldCheck size={20}/></div>
+              <span className="eyebrow">GENERAL RULES</span>
+              <h3>Keep the Bay welcoming.</h3>
+              <ol>
+                <li><strong>Be respectful.</strong> No harassment, bullying, discrimination, or rude behavior.</li>
+                <li><strong>Keep chat appropriate.</strong> No NSFW, offensive, or disturbing content.</li>
+                <li><strong>No spam.</strong> Avoid flooding, excessive caps, repeated messages, or unnecessary pings.</li>
+                <li><strong>Use channels correctly.</strong> Keep conversations in the right places.</li>
+                <li><strong>No advertising.</strong> Do not promote groups, games, servers, or links without permission.</li>
+                <li><strong>Follow staff instructions.</strong> If you disagree, contact staff privately.</li>
+                <li><strong>No drama or arguments.</strong> Keep unnecessary conflict out of the server.</li>
+                <li><strong>Respect privacy.</strong> Do not share personal information.</li>
+                <li><strong>No trolling or impersonation.</strong> Do not pretend to be staff or mislead members.</li>
+                <li><strong>Have fun.</strong> Help make Bay Café positive and welcoming.</li>
+              </ol>
             </article>
 
-            <article>
-              <Megaphone size={19}/>
-              <h3>Stay Updated</h3>
-              <p>Official Discord announcements are displayed directly on the website.</p>
+            <article className="official-about-card alliance-card">
+              <div className="official-card-icon"><Users size={20}/></div>
+              <span className="eyebrow">ALLIANCE INFORMATION</span>
+              <h3>Become a Bay Café affiliate.</h3>
+              <p>Affiliate requirements currently include:</p>
+              <ul>
+                <li>150+ Discord members, excluding bots</li>
+                <li>80+ Roblox group members</li>
+                <li>2 available representatives</li>
+                <li>Active community</li>
+                <li>Good standing with Bay Café</li>
+                <li>No free-rank systems</li>
+                <li>No support for raiding or hacking</li>
+              </ul>
+              <p>
+                To apply, open Support and select the Public Relations category. The Public Relations
+                Department will review your request.
+              </p>
             </article>
-          </div>
+          </section>
+
+          <section className="handbook-links">
+            <div>
+              <span className="eyebrow">OFFICIAL HANDBOOKS</span>
+              <h2>Learn more about Bay Café.</h2>
+            </div>
+
+            <div className="handbook-actions">
+              <a href="https://docs.google.com/document/d/1jv_vuApNj7SQdJOag6Iqnd1QfoFpSfyc_fV_s-FkC64/edit?usp=sharing" target="_blank" rel="noreferrer">
+                Alliance Handbook<ExternalLink size={13}/>
+              </a>
+              <a href="https://docs.google.com/document/d/1K_PxXyy4f7Afg2vUsZDPIqZLKPxbnCgjIx5RYGvibK4/edit?usp=sharing" target="_blank" rel="noreferrer">
+                General Rules<ExternalLink size={13}/>
+              </a>
+            </div>
+          </section>
         </div>
       }
     </div>
@@ -1050,21 +1131,27 @@ function Overview({user,stats,discordMessages,announcements,navigate}){
 
   return <div className="page-stack">
     <section className="hero-grid">
-      <article className="hero-card">
+      <article className="hero-card staff-hero-rich">
         <div className="hero-waterline"/>
-        <Badge>STAFF WORKSPACE</Badge>
-        <h1>Welcome back,<em>{user.displayName}.</em></h1>
-        <p>
-          You are signed in as <strong>{user.roleName}</strong>. Your Bay Café workspace
-          automatically changes with your rank and responsibilities.
-        </p>
-        <div className="button-row">
-          <button className="primary-btn" onClick={()=>navigate("announcements")}>
-            Announcements<ChevronRight size={15}/>
-          </button>
-          <button className="secondary-btn" onClick={()=>navigate("information")}>
-            Open Information<BookOpen size={14}/>
-          </button>
+        <div className="staff-hero-copy">
+          <Badge>STAFF WORKSPACE</Badge>
+          <h1>Welcome back,<em>{user.displayName}.</em></h1>
+          <p>
+            You are signed in as <strong>{user.roleName}</strong>. Your Bay Café workspace
+            automatically changes with your rank and responsibilities.
+          </p>
+          <div className="button-row">
+            <button className="primary-btn" onClick={()=>navigate("announcements")}>
+              Announcements<ChevronRight size={15}/>
+            </button>
+            <button className="secondary-btn" onClick={()=>navigate("information")}>
+              Open Information<BookOpen size={14}/>
+            </button>
+          </div>
+        </div>
+        <div className="staff-hero-visual">
+          <img src={sunsetArt} alt="Bay Café sunset"/>
+          <div className="staff-hero-floating"><Coffee size={14}/>Staff at the Bay</div>
         </div>
       </article>
 
@@ -1082,6 +1169,21 @@ function Overview({user,stats,discordMessages,announcements,navigate}){
           }
         </div>
       </article>
+    </section>
+
+    <section className="staff-visual-shortcuts">
+      <button onClick={()=>navigate("discord")} className="staff-shortcut shortcut-activity">
+        <img src={communityArt} alt="Community activity"/>
+        <div><MessageCircleMore size={17}/><strong>Community Activity</strong><span>See your tracked messages and weekly progress.</span></div>
+      </button>
+      <button onClick={()=>navigate("careers")} className="staff-shortcut shortcut-careers">
+        <img src={careersArt} alt="Careers"/>
+        <div><BriefcaseBusiness size={17}/><strong>Careers</strong><span>Browse open opportunities and applications.</span></div>
+      </button>
+      <button onClick={()=>navigate("information")} className="staff-shortcut shortcut-info">
+        <img src={bayHeroArt} alt="Bay Café information"/>
+        <div><BookOpen size={17}/><strong>Information Hub</strong><span>Policies, expectations, and Bay Café resources.</span></div>
+      </button>
     </section>
 
     <section>
