@@ -2223,3 +2223,104 @@
     margin-left:0;
   }
 }
+
+
+/* V50 — keep the gradient, remove AI-looking dots */
+.community-update-banner{
+  position:relative;
+  min-height:138px;
+  padding:24px 28px;
+  border-radius:18px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:24px;
+  overflow:hidden;
+  background:
+    linear-gradient(105deg,#0b5a70 0%,#167d83 43%,#596f86 72%,#756980 100%);
+  box-shadow:none;
+}
+
+.community-update-copy{
+  position:relative;
+  z-index:2;
+}
+
+.community-update-copy .home-label{
+  color:rgba(232,252,255,.8);
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.05em;
+}
+
+.community-update-copy h2{
+  margin:7px 0 0;
+  font-size:26px;
+  letter-spacing:-.03em;
+}
+
+.community-update-copy p{
+  max-width:700px;
+  margin:8px 0 0;
+  color:rgba(239,251,253,.74);
+  font-size:10px;
+  line-height:1.6;
+}
+
+.community-cafe-accents{
+  position:relative;
+  z-index:2;
+  min-width:150px;
+  height:80px;
+}
+
+.cafe-accent{
+  position:absolute;
+  width:54px;
+  height:54px;
+  border-radius:14px;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(255,255,255,.13);
+  background:rgba(5,31,40,.18);
+  color:#f3fbfc;
+  backdrop-filter:blur(5px);
+}
+
+.coffee-accent{
+  right:52px;
+  top:5px;
+  transform:rotate(-5deg);
+}
+
+.pastry-accent{
+  right:0;
+  bottom:2px;
+  color:#f1d29a;
+  transform:rotate(5deg);
+}
+
+.community-color-dots{
+  display:none!important;
+}
+
+@media(max-width:700px){
+  .community-update-banner{
+    padding:20px;
+    align-items:flex-start;
+  }
+
+  .community-cafe-accents{
+    min-width:96px;
+    height:72px;
+  }
+
+  .cafe-accent{
+    width:44px;
+    height:44px;
+  }
+
+  .coffee-accent{
+    right:38px;
+  }
+}

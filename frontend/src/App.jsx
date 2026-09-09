@@ -521,9 +521,17 @@ function CommunityDashboard({onStaffLogin}){
             <article className="community-feature-card feature-birthday"><img src={sunsetArt} alt="Sunset"/><div className="community-feature-content"><Cake size={18}/><span className="card-kicker">Birthdays</span><h3>Who's celebrating?</h3><p>Take a look at upcoming birthdays around the community.</p><button onClick={()=>setPage("birthdays")}>View Birthdays<ChevronRight size={13}/></button></div></article>
           </section>
 
-          <section className="community-color-banner">
-            <div><span className="home-label">Around the Bay</span><h2>There's always something going on.</h2><p>From events and staff opportunities to updates and community moments, this is where everything comes together.</p></div>
-            <div className="community-color-dots"><span/><span/><span/><span/><span/></div>
+          <section className="community-color-banner community-update-banner">
+            <div className="community-update-copy">
+              <span className="home-label">SEE WHAT’S HAPPENED</span>
+              <h2>Catch up on Bay Café.</h2>
+              <p>Catch up on the latest announcements, events, staff updates, and opportunities from Bay Café.</p>
+            </div>
+
+            <div className="community-cafe-accents" aria-hidden="true">
+              <div className="cafe-accent coffee-accent"><Coffee size={24}/></div>
+              <div className="cafe-accent pastry-accent"><Cake size={22}/></div>
+            </div>
           </section>
 
           <section>
