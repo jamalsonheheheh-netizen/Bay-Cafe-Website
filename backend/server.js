@@ -27,7 +27,7 @@ app.use(cors({origin(origin,cb){if(!origin)return cb(null,true);const clean=orig
 app.use(express.json({limit:"1mb"}));
 fs.mkdirSync(DATA_DIRECTORY,{recursive:true});
 
-const FILES={discordMessages:path.join(DATA_DIRECTORY,"discord-messages.json"),tickets:path.join(DATA_DIRECTORY,"tickets.json"),applications:path.join(DATA_DIRECTORY,"applications.json"),applicationSubmissions:path.join(DATA_DIRECTORY,"application-submissions.json"),activitySettings:path.join(DATA_DIRECTORY,"activity-settings.json"),activityArchive:path.join(DATA_DIRECTORY,"activity-archive.json"),birthdays:path.join(DATA_DIRECTORY,"birthdays.json")};
+const FILES={discordMessages:path.join(DATA_DIRECTORY,"discord-messages.json"),tickets:path.join(DATA_DIRECTORY,"tickets.json"),applications:path.join(DATA_DIRECTORY,"applications.json"),applicationSubmissions:path.join(DATA_DIRECTORY,"application-submissions.json"),activitySettings:path.join(DATA_DIRECTORY,"activity-settings.json"),activityArchive:path.join(DATA_DIRECTORY,"activity-archive.json"),birthdays:path.join(DATA_DIRECTORY,"birthdays.json"),staffDirectory:path.join(DATA_DIRECTORY,"staff-directory.json")};
 function readJson(file,fallback){try{if(!fs.existsSync(file))return fallback;const raw=fs.readFileSync(file,"utf8");return raw?JSON.parse(raw):fallback;}catch{return fallback;}}
 function writeJson(file,value){const temp=`${file}.tmp`;fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(temp,JSON.stringify(value,null,2));fs.renameSync(temp,file);}
 
@@ -553,7 +553,7 @@ let BAY_DIRECTORY_CACHE = {
   members: []
 };
 
-async function bayCafeDirectory() {
+async function bayCafeDirectory({allowStale=true}={}) {
   if (
     BAY_DIRECTORY_CACHE.expiresAt > Date.now() &&
     BAY_DIRECTORY_CACHE.members.length
@@ -561,43 +561,77 @@ async function bayCafeDirectory() {
     return BAY_DIRECTORY_CACHE.members;
   }
 
-  const members = [];
-  let cursor = "";
+  const persisted=readJson(FILES.staffDirectory,{members:[],savedAt:null});
+  const persistedMembers=Array.isArray(persisted?.members)?persisted.members:[];
 
-  do {
-    const url =
-      `https://groups.roblox.com/v1/groups/${GROUP_ID}/users?sortOrder=Asc&limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
+  try{
+    const members = [];
+    let cursor = "";
 
-    const page =
-      await jsonFetch(
-        url,
-        {},
-        60_000
-      );
+    do {
+      const url =
+        `https://groups.roblox.com/v1/groups/${GROUP_ID}/users?sortOrder=Asc&limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
 
-    for (const item of page.data || []) {
-      if (!item?.user) continue;
+      const page =
+        await jsonFetch(
+          url,
+          {},
+          60_000
+        );
 
-      members.push({
-        id: item.user.userId,
-        username: item.user.username,
-        displayName: item.user.displayName,
-        roleName: item.role?.name || "Member",
-        roleRank: item.role?.rank || 0
+      for (const item of page.data || []) {
+        if (!item?.user) continue;
+
+        members.push({
+          id: item.user.userId,
+          username: item.user.username,
+          displayName: item.user.displayName,
+          roleName: item.role?.name || "Member",
+          roleRank: item.role?.rank || 0
+        });
+      }
+
+      cursor =
+        page.nextPageCursor || "";
+    } while (cursor);
+
+    if(members.length){
+      BAY_DIRECTORY_CACHE = {
+        expiresAt:
+          Date.now() + 5 * 60_000,
+        members
+      };
+
+      writeJson(FILES.staffDirectory,{
+        savedAt:new Date().toISOString(),
+        members
       });
+
+      return members;
     }
 
-    cursor =
-      page.nextPageCursor || "";
-  } while (cursor);
+    if(allowStale&&persistedMembers.length){
+      console.warn("[Bay Café] Roblox directory returned no members; using persistent staff-directory cache.");
+      BAY_DIRECTORY_CACHE={
+        expiresAt:Date.now()+60_000,
+        members:persistedMembers
+      };
+      return persistedMembers;
+    }
 
-  BAY_DIRECTORY_CACHE = {
-    expiresAt:
-      Date.now() + 5 * 60_000,
-    members
-  };
+    return [];
+  }catch(error){
+    if(allowStale&&persistedMembers.length){
+      console.warn(`[Bay Café] Roblox directory refresh failed (${error.message}); using persistent staff-directory cache.`);
+      BAY_DIRECTORY_CACHE={
+        expiresAt:Date.now()+60_000,
+        members:persistedMembers
+      };
+      return persistedMembers;
+    }
 
-  return members;
+    throw error;
+  }
 }
 
 app.get(
@@ -1041,100 +1075,111 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
     });
   }
 
+  const weekStart=startOfCurrentWeek();
+  const all=readJson(FILES.discordMessages,[]);
+  const thisWeek=all
+    .filter(item=>new Date(item.createdAt)>=weekStart)
+    .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+
+  const settings=getActivitySettings();
+  const archive=readJson(FILES.activityArchive,[]);
+
+  let directory=[];
+  let directoryWarning="";
+
   try{
-    const weekStart=startOfCurrentWeek();
-    const all=readJson(FILES.discordMessages,[]);
-    const thisWeek=all
-      .filter(item=>new Date(item.createdAt)>=weekStart)
-      .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
-
-    const settings=getActivitySettings();
-    const archive=readJson(FILES.activityArchive,[]);
-    const directory=await bayCafeDirectory();
-
-    const members=directory
-      .map(member=>{
-        const team=activityTeamForRole(member.roleName);
-        if(!team)return null;
-
-        const names=new Set([
-          normalizeIdentity(member.username),
-          normalizeIdentity(member.displayName)
-        ]);
-
-        const messages=thisWeek.filter(message=>
-          [
-            normalizeIdentity(message.authorUsername),
-            normalizeIdentity(message.authorName)
-          ].some(value=>value&&names.has(value))
-        );
-
-        const requirement=activityRequirementFor(
-          {roleName:member.roleName},
-          settings
-        );
-
-        return {
-          id:member.id,
-          username:member.username,
-          displayName:member.displayName,
-          roleName:member.roleName,
-          roleRank:member.roleRank,
-          team,
-          messageCount:messages.length,
-          requirement,
-          meetsRequirement:messages.length>=requirement,
-          avatar:messages[0]?.authorAvatar||"",
-          messages:messages.slice(0,500).map(message=>({
-            id:message.id,
-            channelId:message.channelId,
-            channelName:message.channelName,
-            content:message.content,
-            createdAt:message.createdAt,
-            url:message.url
-          }))
-        };
-      })
-      .filter(Boolean)
-      .sort((a,b)=>{
-        const teamOrder={Corporate:0,Management:1,Directing:2};
-        const teamDiff=(teamOrder[a.team]??9)-(teamOrder[b.team]??9);
-        if(teamDiff)return teamDiff;
-        if(b.roleRank!==a.roleRank)return b.roleRank-a.roleRank;
-        return String(a.username).localeCompare(String(b.username));
-      });
-
-    res.json({
-      success:true,
-      weekStart:weekStart.toISOString(),
-      totalTracked:all.length,
-      thisWeekTracked:thisWeek.length,
-      settings,
-      sync:{
-        lastSyncedAt:activityLastSyncedAt,
-        running:activitySyncRunning,
-        intervalSeconds:60
-      },
-      members,
-      teamTotals:{
-        Corporate:members.filter(item=>item.team==="Corporate").length,
-        Management:members.filter(item=>item.team==="Management").length,
-        Directing:members.filter(item=>item.team==="Directing").length
-      },
-      recentArchives:archive.slice(0,5).map(item=>({
-        id:item.id,
-        reason:item.reason,
-        archivedAt:item.archivedAt,
-        archivedBy:item.archivedBy,
-        messageCount:item.messageCount
-      }))
-    });
+    directory=await bayCafeDirectory({allowStale:true});
   }catch(error){
-    res.status(400).json({
-      success:false,
-      message:error.message||"Unable to load activity management."
-    });
+    directoryWarning=
+      "Roblox staff directory is temporarily unavailable. Discord activity is still being tracked.";
+    console.error(`[Bay Café] Activity Management directory error: ${error.message}`);
   }
+
+  const members=directory
+    .map(member=>{
+      const team=activityTeamForRole(member.roleName);
+      if(!team)return null;
+
+      const names=new Set([
+        normalizeIdentity(member.username),
+        normalizeIdentity(member.displayName)
+      ]);
+
+      const messages=thisWeek.filter(message=>
+        [
+          normalizeIdentity(message.authorUsername),
+          normalizeIdentity(message.authorName)
+        ].some(value=>value&&names.has(value))
+      );
+
+      const requirement=activityRequirementFor(
+        {roleName:member.roleName},
+        settings
+      );
+
+      return {
+        id:member.id,
+        username:member.username,
+        displayName:member.displayName,
+        roleName:member.roleName,
+        roleRank:member.roleRank,
+        team,
+        messageCount:messages.length,
+        requirement,
+        meetsRequirement:messages.length>=requirement,
+        avatar:messages[0]?.authorAvatar||"",
+        messages:messages.slice(0,500).map(message=>({
+          id:message.id,
+          channelId:message.channelId,
+          channelName:message.channelName,
+          content:message.content,
+          createdAt:message.createdAt,
+          url:message.url
+        }))
+      };
+    })
+    .filter(Boolean)
+    .sort((a,b)=>{
+      const teamOrder={Corporate:0,Management:1,Directing:2};
+      const teamDiff=(teamOrder[a.team]??9)-(teamOrder[b.team]??9);
+      if(teamDiff)return teamDiff;
+      if(b.roleRank!==a.roleRank)return b.roleRank-a.roleRank;
+      return String(a.username).localeCompare(String(b.username));
+    });
+
+  // Always return the page data even if Roblox's public group API is having a
+  // temporary problem. This prevents the whole Activity Management screen from
+  // failing with Request failed (400).
+  res.json({
+    success:true,
+    weekStart:weekStart.toISOString(),
+    totalTracked:all.length,
+    thisWeekTracked:thisWeek.length,
+    settings,
+    sync:{
+      lastSyncedAt:activityLastSyncedAt,
+      running:activitySyncRunning,
+      intervalSeconds:60
+    },
+    directory:{
+      available:directory.length>0,
+      warning:directoryWarning,
+      cached:readJson(FILES.staffDirectory,{members:[]}).members?.length>0
+    },
+    members,
+    teamTotals:{
+      Corporate:members.filter(item=>item.team==="Corporate").length,
+      Management:members.filter(item=>item.team==="Management").length,
+      Directing:members.filter(item=>item.team==="Directing").length
+    },
+    recentArchives:archive.slice(0,5).map(item=>({
+      id:item.id,
+      reason:item.reason,
+      archivedAt:item.archivedAt,
+      archivedBy:item.archivedBy,
+      messageCount:item.messageCount
+    }))
+  });
 });
 app.put("/api/activity/settings",auth,(req,res)=>{
   if(!isLeadershipOrOwnership(req.user)){
