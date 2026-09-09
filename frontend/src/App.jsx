@@ -796,16 +796,19 @@ function Dashboard({token,user,onLogout}){
     );
 
   const nav=[
-    {id:"overview",label:"Overview",icon:Waves,show:true},
-    {id:"announcements",label:"Announcements",icon:Megaphone,show:true},
-    {id:"discord",label:"Community Activity",icon:MessageCircleMore,show:caps.discord},
-    {id:"activityAdmin",label:"Activity Management",icon:Gauge,show:hasLeadershipAccess},
-    {id:"communityAdmin",label:"Community Management",icon:Cake,show:hasLeadershipAccess},
-    {id:"careers",label:"Careers",icon:BriefcaseBusiness,show:true},
-    {id:"applications",label:"Applications",icon:FilePenLine,show:hasLeadershipAccess},
-    {id:"information",label:"Information",icon:BookOpen,show:true},
-    {id:"profiles",label:"Profiles",icon:UserRoundSearch,show:caps.profiles},
-    {id:"tickets",label:"Support",icon:LifeBuoy,show:caps.tickets}
+    {id:"overview",label:"Overview",icon:Waves,section:"MAIN",show:true},
+    {id:"announcements",label:"Announcements",icon:Megaphone,section:"MAIN",show:true},
+
+    {id:"discord",label:"My Activity",icon:MessageCircleMore,section:"ACTIVITY",show:caps.discord},
+    {id:"activityAdmin",label:"Team Activity",icon:Gauge,section:"ACTIVITY",show:hasLeadershipAccess},
+    {id:"communityAdmin",label:"Birthdays",icon:Cake,section:"COMMUNITY",show:hasLeadershipAccess},
+
+    {id:"careers",label:"Careers",icon:BriefcaseBusiness,section:"STAFF",show:true},
+    {id:"applications",label:"Applications",icon:FilePenLine,section:"STAFF",show:hasLeadershipAccess},
+
+    {id:"information",label:"Staff Info",icon:BookOpen,section:"TOOLS",show:true},
+    {id:"profiles",label:"Profiles",icon:UserRoundSearch,section:"TOOLS",show:caps.profiles},
+    {id:"tickets",label:"Support",icon:LifeBuoy,section:"TOOLS",show:caps.tickets}
   ].filter(item=>item.show);
 
   async function loadStats(){
@@ -997,7 +1000,7 @@ function Dashboard({token,user,onLogout}){
     page==="careers"?"Careers":
     page==="applications"?"Applications":
     page==="activityAdmin"?"Activity Management":
-    page==="communityAdmin"?"Community Management":
+    page==="communityAdmin"?"Birthdays":
     page==="information"?"Information Hub":
     page==="profiles"?"Profile Lookup":
     page==="tickets"?"Support Center":
@@ -1020,17 +1023,23 @@ function Dashboard({token,user,onLogout}){
         </div>
       </div>
 
-      <nav>
-        {nav.map(item=>{
+      <nav className="staff-nav">
+        {nav.map((item,index)=>{
           const Icon=item.icon;
-          return <button
-            key={item.id}
-            className={page===item.id?"active":""}
-            onClick={()=>open(item.id)}
-          >
-            <Icon size={16}/>
-            {item.label}
-          </button>;
+          const showSection=index===0||nav[index-1]?.section!==item.section;
+
+          return <React.Fragment key={item.id}>
+            {showSection&&
+              <span className="staff-nav-section">{item.section}</span>
+            }
+            <button
+              className={page===item.id?"active":""}
+              onClick={()=>open(item.id)}
+            >
+              <Icon size={16}/>
+              <span>{item.label}</span>
+            </button>
+          </React.Fragment>;
         })}
       </nav>
 

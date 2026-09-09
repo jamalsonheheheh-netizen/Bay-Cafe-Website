@@ -2077,3 +2077,149 @@
 .primary-btn{background:#8ce2dc}
 .primary-btn:hover,.secondary-btn:hover{transform:none;filter:brightness(1.06)}
 @media(max-width:700px){.community-feature-card>img{height:170px}}
+
+
+/* V48 — obvious staff sidebar redesign */
+.sidebar{
+  width:252px;
+  padding:20px 16px 16px;
+  border-right:1px solid rgba(255,255,255,.055);
+  background:#061f29;
+  backdrop-filter:none;
+}
+
+.workspace{
+  margin-left:252px;
+}
+
+.sidebar-brand{
+  padding:0 6px 16px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+
+.sidebar-brand .bay-mark.small{
+  width:36px;
+  height:36px;
+  border-radius:11px;
+  box-shadow:none;
+}
+
+.sidebar-brand strong{
+  font-size:13px;
+  letter-spacing:-.01em;
+}
+
+.sidebar-brand span{
+  margin-top:1px;
+  font-size:8px;
+  letter-spacing:.08em;
+}
+
+.user-mini{
+  margin:16px 0 12px;
+  padding:10px 8px;
+  border:0;
+  border-radius:10px;
+  background:rgba(255,255,255,.025);
+}
+
+.user-mini img{
+  width:34px;
+  height:34px;
+  border-radius:9px;
+}
+
+.user-mini strong{
+  font-size:10px;
+}
+
+.user-mini span{
+  font-size:8px;
+}
+
+.admin-access-indicator{
+  margin-top:4px;
+  display:block;
+  color:#71d8d5;
+  font-size:7px;
+  font-weight:700;
+  letter-spacing:.03em;
+}
+
+.staff-nav{
+  display:block!important;
+  overflow-y:auto;
+  padding-right:2px;
+}
+
+.staff-nav-section{
+  display:block;
+  margin:17px 8px 6px;
+  color:#557f89;
+  font-size:7px;
+  font-weight:800;
+  letter-spacing:.12em;
+}
+
+.staff-nav-section:first-child{
+  margin-top:5px;
+}
+
+.sidebar .staff-nav button{
+  width:100%;
+  min-height:38px;
+  padding:0 9px;
+  margin:1px 0;
+  border-radius:8px;
+  gap:9px;
+  background:transparent;
+  color:#8facb4;
+  font-size:9px;
+  font-weight:650;
+  box-shadow:none;
+  transition:background .15s ease,color .15s ease;
+}
+
+.sidebar .staff-nav button:hover{
+  background:rgba(255,255,255,.035);
+  color:#d9f5f7;
+}
+
+.sidebar .staff-nav button.active{
+  background:rgba(111,225,218,.075);
+  color:#e9ffff;
+  box-shadow:inset 2px 0 #70e0d8;
+}
+
+.sidebar .staff-nav button.active svg{
+  color:#75e6da;
+}
+
+.sidebar-links{
+  margin-top:auto;
+  padding:12px 4px 0;
+  border-top:1px solid rgba(255,255,255,.055);
+}
+
+.sidebar-links a{
+  padding:6px 2px;
+  font-size:8px;
+}
+
+.logout-btn{
+  min-height:36px;
+  margin-top:6px;
+  border-radius:8px;
+  background:transparent;
+  border:1px solid rgba(255,255,255,.055)!important;
+}
+
+@media(max-width:820px){
+  .sidebar{
+    width:252px;
+  }
+
+  .workspace{
+    margin-left:0;
+  }
+}
