@@ -2341,3 +2341,26 @@
   font-size:9px;
   color:#7fa2aa;
 }
+
+
+/* V52 — keep "Hey, username." on one line when space allows */
+.staff-hero-copy h1{
+  display:flex;
+  align-items:baseline;
+  flex-wrap:wrap;
+  gap:.18em;
+}
+
+.staff-hero-copy h1 em{
+  display:inline;
+}
+
+@media(max-width:620px){
+  .staff-hero-copy h1{
+    display:block;
+  }
+
+  .staff-hero-copy h1 em{
+    display:inline;
+  }
+}
