@@ -857,7 +857,35 @@ function broadcast(type,payload){const msg=`event: ${type}\ndata: ${JSON.stringi
 app.get("/api/live",(req,res)=>{const user=verifySessionToken(String(req.query.token||"").trim());if(!user)return res.status(401).json({success:false,message:"Sign in required."});res.setHeader("Content-Type","text/event-stream");res.setHeader("Cache-Control","no-cache, no-transform");res.setHeader("Connection","keep-alive");res.flushHeaders?.();res.write(`event: connected\ndata: ${JSON.stringify({at:new Date().toISOString()})}\n\n`);liveClients.add(res);const heartbeat=setInterval(()=>res.write(": heartbeat\n\n"),25000);req.on("close",()=>{clearInterval(heartbeat);liveClients.delete(res);});});
 
 function shouldTrackMessage(message){if(!message?.guildId||!message?.id||message.author?.bot)return false;if(EXCLUDED_CHANNEL_IDS.has(String(message.channelId)))return false;if(TRACK_CHANNEL_IDS.size)return TRACK_CHANNEL_IDS.has(String(message.channelId));return true;}
-function discordRecord(message){return {id:message.id,guildId:message.guildId,channelId:message.channelId,channelName:message.channel?.name||"unknown-channel",content:message.content||"",authorId:message.author.id,authorName:message.member?.displayName||message.author.globalName||message.author.username,authorUsername:message.author.username,authorAvatar:message.author.displayAvatarURL({size:128}),createdAt:message.createdAt.toISOString(),editedAt:message.editedAt?.toISOString()||null,url:message.url,attachments:[...message.attachments.values()].map(x=>({id:x.id,name:x.name,url:x.url,contentType:x.contentType||""}))};}
+function discordRecord(message){
+  const roleNames=message.member?.roles?.cache
+    ? [...message.member.roles.cache.values()]
+        .filter(role=>role&&role.name!=="@everyone")
+        .map(role=>role.name)
+    : [];
+
+  return {
+    id:message.id,
+    guildId:message.guildId,
+    channelId:message.channelId,
+    channelName:message.channel?.name||"unknown-channel",
+    content:message.content||"",
+    authorId:message.author.id,
+    authorName:message.member?.displayName||message.author.globalName||message.author.username,
+    authorUsername:message.author.username,
+    authorAvatar:message.author.displayAvatarURL({size:128}),
+    authorRoleNames:roleNames,
+    createdAt:message.createdAt.toISOString(),
+    editedAt:message.editedAt?.toISOString()||null,
+    url:message.url,
+    attachments:[...message.attachments.values()].map(x=>({
+      id:x.id,
+      name:x.name,
+      url:x.url,
+      contentType:x.contentType||""
+    }))
+  };
+}
 async function persistDiscordMessage(message){if(!shouldTrackMessage(message))return null;const items=readJson(FILES.discordMessages,[]),record=discordRecord(message);const next=[record,...items.filter(x=>x.id!==record.id)].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,20000);writeJson(FILES.discordMessages,next);broadcast("discord:message",record);return record;}
 async function removeDiscordMessage(id){const items=readJson(FILES.discordMessages,[]),next=items.filter(x=>x.id!==id);if(next.length===items.length)return;writeJson(FILES.discordMessages,next);broadcast("discord:delete",{id});}
 async function trackedGuild(){
@@ -978,7 +1006,8 @@ async function syncDiscordCurrentWeek({reason="scheduled"}={}){
         if(
           !previous||
           previous.content!==record.content||
-          previous.channelName!==record.channelName
+          previous.channelName!==record.channelName||
+          JSON.stringify(previous.authorRoleNames||[])!==JSON.stringify(record.authorRoleNames||[])
         ){
           addedOrUpdated++;
         }
@@ -1172,6 +1201,65 @@ app.get("/api/discord/channels",auth,(req,res)=>{
 
 
 
+function activityTeamFromDiscordRoles(roleNames=[]){
+  const roles=(Array.isArray(roleNames)?roleNames:[])
+    .map(value=>String(value||"").trim().toLowerCase());
+
+  const has=values=>roles.some(role=>values.some(value=>role.includes(value)));
+
+  if(has([
+    "junior corporate",
+    "senior corporate",
+    "head corporate",
+    "corporate intern"
+  ])){
+    return "Corporate";
+  }
+
+  if(has([
+    "junior director",
+    "senior director",
+    "head director",
+    "management"
+  ])){
+    return "Management";
+  }
+
+  if(has([
+    "staff assistant",
+    "general manager",
+    "assistant manager",
+    "supervisor",
+    "directing team"
+  ])){
+    return "Directing";
+  }
+
+  return null;
+}
+
+function activityRequirementFromRoleNames(roleNames=[],settings=getActivitySettings()){
+  const roles=(Array.isArray(roleNames)?roleNames:[])
+    .map(value=>String(value||"").trim().toLowerCase());
+
+  const exactOrder=[
+    "head corporate",
+    "senior corporate",
+    "junior corporate",
+    "head director",
+    "senior director",
+    "junior director"
+  ];
+
+  for(const role of exactOrder){
+    if(roles.some(value=>value.includes(role))){
+      return Number(settings.rankRequirements?.[role])||0;
+    }
+  }
+
+  return 0;
+}
+
 function activityTeamForRole(roleName=""){
   const name=String(roleName).trim().toLowerCase();
 
@@ -1227,56 +1315,165 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
     console.error(`[Bay Café] Activity Management directory error: ${error.message}`);
   }
 
-  const members=directory
-    .map(member=>{
-      const team=activityTeamForRole(member.roleName);
-      if(!team)return null;
+  const membersByKey=new Map();
 
-      const names=new Set([
-        normalizeIdentity(member.username),
-        normalizeIdentity(member.displayName)
-      ]);
+  // First: Roblox directory members. This preserves zero-message members and
+  // rank-based requirements when Roblox and Discord names happen to match.
+  for(const member of directory){
+    const team=activityTeamForRole(member.roleName);
+    if(!team)continue;
 
-      const messages=thisWeek.filter(message=>
-        [
-          normalizeIdentity(message.authorUsername),
-          normalizeIdentity(message.authorName)
-        ].some(value=>value&&names.has(value))
-      );
+    const names=new Set([
+      normalizeIdentity(member.username),
+      normalizeIdentity(member.displayName)
+    ]);
 
-      const requirement=activityRequirementFor(
-        {roleName:member.roleName},
-        settings
-      );
+    const messages=thisWeek.filter(message=>
+      [
+        normalizeIdentity(message.authorUsername),
+        normalizeIdentity(message.authorName)
+      ].some(value=>value&&names.has(value))
+    );
 
-      return {
-        id:member.id,
-        username:member.username,
-        displayName:member.displayName,
-        roleName:member.roleName,
-        roleRank:member.roleRank,
-        team,
-        messageCount:messages.length,
-        requirement,
-        meetsRequirement:messages.length>=requirement,
-        avatar:messages[0]?.authorAvatar||"",
-        messages:messages.slice(0,500).map(message=>({
-          id:message.id,
-          channelId:message.channelId,
-          channelName:message.channelName,
-          content:message.content,
-          createdAt:message.createdAt,
-          url:message.url
-        }))
-      };
-    })
-    .filter(Boolean)
+    const requirement=activityRequirementFor(
+      {roleName:member.roleName},
+      settings
+    );
+
+    const matchedAuthorId=messages[0]?.authorId||"";
+    const key=matchedAuthorId
+      ? `discord:${matchedAuthorId}`
+      : `roblox:${member.id}`;
+
+    membersByKey.set(key,{
+      id:matchedAuthorId||`roblox-${member.id}`,
+      robloxId:member.id,
+      discordId:matchedAuthorId,
+      username:messages[0]?.authorUsername||member.username,
+      displayName:messages[0]?.authorName||member.displayName,
+      robloxUsername:member.username,
+      roleName:member.roleName,
+      roleRank:member.roleRank,
+      team,
+      messageCount:messages.length,
+      requirement,
+      meetsRequirement:messages.length>=requirement,
+      avatar:messages[0]?.authorAvatar||"",
+      matchedBy:messages.length?"name":"roblox-directory",
+      messages:messages.slice(0,500).map(message=>({
+        id:message.id,
+        channelId:message.channelId,
+        channelName:message.channelName,
+        content:message.content,
+        createdAt:message.createdAt,
+        url:message.url
+      }))
+    });
+  }
+
+  // Second: every Discord author who actually sent a tracked message this week.
+  // This fixes the old bug where someone disappeared from Activity Management
+  // when their Discord username/display name did not match their Roblox name.
+  const discordAuthors=new Map();
+
+  for(const message of thisWeek){
+    if(!message.authorId)continue;
+
+    const current=discordAuthors.get(String(message.authorId))||{
+      authorId:String(message.authorId),
+      authorUsername:message.authorUsername||"",
+      authorName:message.authorName||message.authorUsername||"",
+      authorAvatar:message.authorAvatar||"",
+      roleNames:Array.isArray(message.authorRoleNames)?message.authorRoleNames:[],
+      messages:[]
+    };
+
+    current.authorUsername=message.authorUsername||current.authorUsername;
+    current.authorName=message.authorName||current.authorName;
+    current.authorAvatar=message.authorAvatar||current.authorAvatar;
+
+    if(Array.isArray(message.authorRoleNames)&&message.authorRoleNames.length){
+      current.roleNames=message.authorRoleNames;
+    }
+
+    current.messages.push(message);
+    discordAuthors.set(String(message.authorId),current);
+  }
+
+  for(const author of discordAuthors.values()){
+    const team=activityTeamFromDiscordRoles(author.roleNames);
+
+    // Only add unmatched authors when their Discord roles identify them as one
+    // of the tracked teams. Existing Roblox/name matches are enriched below.
+    const key=`discord:${author.authorId}`;
+    const existing=membersByKey.get(key);
+
+    if(existing){
+      existing.messages=author.messages.slice(0,500).map(message=>({
+        id:message.id,
+        channelId:message.channelId,
+        channelName:message.channelName,
+        content:message.content,
+        createdAt:message.createdAt,
+        url:message.url
+      }));
+      existing.messageCount=author.messages.length;
+      existing.avatar=author.authorAvatar||existing.avatar;
+      existing.username=author.authorUsername||existing.username;
+      existing.displayName=author.authorName||existing.displayName;
+      existing.discordRoleNames=author.roleNames;
+      existing.matchedBy="discord-id";
+      existing.meetsRequirement=existing.messageCount>=existing.requirement;
+      continue;
+    }
+
+    if(!team)continue;
+
+    const requirement=activityRequirementFromRoleNames(author.roleNames,settings);
+
+    membersByKey.set(key,{
+      id:author.authorId,
+      robloxId:null,
+      discordId:author.authorId,
+      username:author.authorUsername,
+      displayName:author.authorName,
+      robloxUsername:"",
+      roleName:
+        author.roleNames.find(role=>
+          activityTeamForRole(role)===team
+        )||
+        author.roleNames.find(role=>
+          activityTeamFromDiscordRoles([role])===team
+        )||
+        `${team} Team`,
+      roleRank:0,
+      team,
+      messageCount:author.messages.length,
+      requirement,
+      meetsRequirement:requirement>0
+        ? author.messages.length>=requirement
+        : true,
+      avatar:author.authorAvatar,
+      discordRoleNames:author.roleNames,
+      matchedBy:"discord-role",
+      messages:author.messages.slice(0,500).map(message=>({
+        id:message.id,
+        channelId:message.channelId,
+        channelName:message.channelName,
+        content:message.content,
+        createdAt:message.createdAt,
+        url:message.url
+      }))
+    });
+  }
+
+  const members=[...membersByKey.values()]
     .sort((a,b)=>{
       const teamOrder={Corporate:0,Management:1,Directing:2};
       const teamDiff=(teamOrder[a.team]??9)-(teamOrder[b.team]??9);
       if(teamDiff)return teamDiff;
-      if(b.roleRank!==a.roleRank)return b.roleRank-a.roleRank;
-      return String(a.username).localeCompare(String(b.username));
+      if((b.roleRank||0)!==(a.roleRank||0))return (b.roleRank||0)-(a.roleRank||0);
+      return String(a.username||"").localeCompare(String(b.username||""));
     });
 
   // Always return the page data even if Roblox's public group API is having a
