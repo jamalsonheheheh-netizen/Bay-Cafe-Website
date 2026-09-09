@@ -18,6 +18,8 @@ const DISCORD_BOT_TOKEN = String(process.env.DISCORD_BOT_TOKEN || "").trim();
 const DISCORD_GUILD_ID = String(process.env.DISCORD_GUILD_ID || "1446083660351799381").trim();
 const DISCORD_TICKET_CHANNEL_ID = String(process.env.DISCORD_TICKET_CHANNEL_ID || "").trim();
 const DISCORD_SUPPORT_ROLE_ID = String(process.env.DISCORD_SUPPORT_ROLE_ID || "").trim();
+const DISCORD_GOVERNANCE_ROLE_ID = "1494982590095036458";
+const DISCORD_MANAGEMENT_ROLE_ID = "1494982712321245235";
 const DISCORD_ANNOUNCEMENT_CHANNEL_ID = String(process.env.DISCORD_ANNOUNCEMENT_CHANNEL_ID || "1446415574682046495").trim();
 const TRACK_CHANNEL_IDS = new Set(String(process.env.DISCORD_TRACK_CHANNEL_IDS || "").split(",").map(v=>v.trim()).filter(Boolean));
 const EXCLUDED_CHANNEL_IDS = new Set(String(process.env.DISCORD_EXCLUDED_CHANNEL_IDS || "").split(",").map(v=>v.trim()).filter(Boolean));
@@ -899,11 +901,13 @@ app.get("/api/live",(req,res)=>{const user=verifySessionToken(String(req.query.t
 
 function shouldTrackMessage(message){if(!message?.guildId||!message?.id||message.author?.bot)return false;if(EXCLUDED_CHANNEL_IDS.has(String(message.channelId)))return false;if(TRACK_CHANNEL_IDS.size)return TRACK_CHANNEL_IDS.has(String(message.channelId));return true;}
 function discordRecord(message){
-  const roleNames=message.member?.roles?.cache
+  const memberRoles=message.member?.roles?.cache
     ? [...message.member.roles.cache.values()]
         .filter(role=>role&&role.name!=="@everyone")
-        .map(role=>role.name)
     : [];
+
+  const roleNames=memberRoles.map(role=>role.name);
+  const roleIds=memberRoles.map(role=>String(role.id));
 
   return {
     id:message.id,
@@ -916,6 +920,7 @@ function discordRecord(message){
     authorUsername:message.author.username,
     authorAvatar:message.author.displayAvatarURL({size:128}),
     authorRoleNames:roleNames,
+    authorRoleIds:roleIds,
     createdAt:message.createdAt.toISOString(),
     editedAt:message.editedAt?.toISOString()||null,
     url:message.url,
@@ -1048,7 +1053,8 @@ async function syncDiscordCurrentWeek({reason="scheduled"}={}){
           !previous||
           previous.content!==record.content||
           previous.channelName!==record.channelName||
-          JSON.stringify(previous.authorRoleNames||[])!==JSON.stringify(record.authorRoleNames||[])
+          JSON.stringify(previous.authorRoleNames||[])!==JSON.stringify(record.authorRoleNames||[])||
+          JSON.stringify(previous.authorRoleIds||[])!==JSON.stringify(record.authorRoleIds||[])
         ){
           addedOrUpdated++;
         }
@@ -1371,7 +1377,21 @@ app.get("/api/discord/channels",auth,(req,res)=>{
 
 
 
-function activityTeamFromDiscordRoles(roleNames=[]){
+function activityTeamFromDiscordRoles(roleNames=[],roleIds=[]){
+  const ids=new Set(
+    (Array.isArray(roleIds)?roleIds:[])
+      .map(value=>String(value||"").trim())
+      .filter(Boolean)
+  );
+
+  if(ids.has(DISCORD_GOVERNANCE_ROLE_ID)){
+    return "Corporate";
+  }
+
+  if(ids.has(DISCORD_MANAGEMENT_ROLE_ID)){
+    return "Management";
+  }
+
   const roles=(Array.isArray(roleNames)?roleNames:[])
     .map(value=>String(value||"").trim().toLowerCase());
 
@@ -1381,7 +1401,8 @@ function activityTeamFromDiscordRoles(roleNames=[]){
     "junior corporate",
     "senior corporate",
     "head corporate",
-    "corporate intern"
+    "corporate intern",
+    "governance"
   ])){
     return "Corporate";
   }
@@ -1517,6 +1538,7 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
       authorName:message.authorName||message.authorUsername||"",
       authorAvatar:message.authorAvatar||"",
       roleNames:[],
+      roleIds:[],
       messages:[]
     };
 
@@ -1526,6 +1548,10 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
 
     if(Array.isArray(message.authorRoleNames)&&message.authorRoleNames.length){
       current.roleNames=message.authorRoleNames;
+    }
+
+    if(Array.isArray(message.authorRoleIds)&&message.authorRoleIds.length){
+      current.roleIds=message.authorRoleIds;
     }
 
     current.messages.push(message);
@@ -1540,7 +1566,7 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
       String(author.authorUsername||"").trim().toLowerCase()
     )||null;
 
-    const teamFromDiscord=activityTeamFromDiscordRoles(author.roleNames);
+    const teamFromDiscord=activityTeamFromDiscordRoles(author.roleNames,author.roleIds);
     const teamFromRoblox=exactRobloxMatch
       ? activityTeamForRole(exactRobloxMatch.roleName)
       : null;
@@ -1555,7 +1581,7 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
     const roleName=
       exactRobloxMatch?.roleName||
       author.roleNames.find(role=>
-        activityTeamFromDiscordRoles([role])===team
+        activityTeamFromDiscordRoles([role],[])===team
       )||
       `${team} Team`;
 
@@ -1581,6 +1607,7 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
       meetsRequirement:authorMessages.length>=requirement,
       avatar:author.authorAvatar,
       discordRoleNames:author.roleNames,
+      discordRoleIds:author.roleIds,
       matchedBy:exactRobloxMatch?"exact-username":"discord-id",
       messages:authorMessages.slice(0,500).map(message=>({
         id:message.id,
@@ -1623,6 +1650,7 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
       meetsRequirement:requirement===0,
       avatar:"",
       discordRoleNames:[],
+      discordRoleIds:[],
       matchedBy:"roblox-directory",
       messages:[]
     });
@@ -1721,7 +1749,66 @@ app.post("/api/activity/sync",auth,async(req,res)=>{
   }
 });
 
-app.post("/api/activity/rebuild",auth,async(req,res)=>{if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});try{const messageCount=await rebuildDiscordHistory();res.json({success:true,messageCount});}catch(error){res.status(400).json({success:false,message:error.message||"Unable to rebuild activity."});}});
+app.post("/api/activity/rebuild",auth,async(req,res)=>{
+  if(!isLeadershipOrOwnership(req.user)){
+    return res.status(403).json({
+      success:false,
+      message:"Leadership or Ownership access required."
+    });
+  }
+
+  if(activitySyncRunning){
+    return res.status(409).json({
+      success:false,
+      message:"Activity is already syncing. Wait a moment and try again."
+    });
+  }
+
+  activitySyncRunning=true;
+
+  try{
+    const before=readJson(FILES.discordMessages,[]);
+    const weekStart=startOfCurrentWeek();
+    const beforeWeek=before.filter(item=>new Date(item.createdAt)<weekStart);
+    const oldThisWeek=before.length-beforeWeek.length;
+
+    // Clear current-week records first so this is a real rebuild, not just a merge.
+    writeJson(FILES.discordMessages,beforeWeek);
+
+    const messageCount=await rebuildDiscordHistory();
+
+    activityLastSyncedAt=new Date().toISOString();
+
+    const after=readJson(FILES.discordMessages,[]);
+    const afterThisWeek=after.filter(item=>new Date(item.createdAt)>=weekStart).length;
+
+    broadcast("activity:rebuild",{
+      weekStart:weekStart.toISOString(),
+      oldThisWeek,
+      afterThisWeek,
+      rebuiltMessages:messageCount,
+      completedAt:activityLastSyncedAt
+    });
+
+    return res.json({
+      success:true,
+      messageCount,
+      oldThisWeek,
+      afterThisWeek,
+      weekStart:weekStart.toISOString(),
+      completedAt:activityLastSyncedAt
+    });
+  }catch(error){
+    console.error(`[Bay Café] Activity rebuild failed: ${error.stack||error.message}`);
+
+    return res.status(500).json({
+      success:false,
+      message:error.message||"Unable to rebuild activity."
+    });
+  }finally{
+    activitySyncRunning=false;
+  }
+});
 app.post("/api/activity/reset",auth,(req,res)=>{if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});archiveCurrentActivity("manual reset",req.user);const weekStart=startOfCurrentWeek();const all=readJson(FILES.discordMessages,[]);writeJson(FILES.discordMessages,all.filter(item=>new Date(item.createdAt)<weekStart));broadcast("activity:reset",{weekStart:weekStart.toISOString()});res.json({success:true});});
 
 
