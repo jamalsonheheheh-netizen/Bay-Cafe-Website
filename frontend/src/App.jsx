@@ -1,5 +1,9 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {Activity,Archive,ArrowRight,Bell,BookOpen,BriefcaseBusiness,Cake,CheckCircle2,ChevronRight,Coffee,ExternalLink,FilePenLine,Gauge,Gift,LifeBuoy,Link2,LogOut,Megaphone,Menu,MessageCircleMore,Plus,Search,ShieldCheck,Sparkles,Ticket,Trash2,UserRoundSearch,Users,Waves,X} from "lucide-react";
+import bayHeroArt from "./assets/bay-hero-art.svg";
+import careersArt from "./assets/careers-art.svg";
+import communityArt from "./assets/community-art.svg";
+import sunsetArt from "./assets/sunset-art.svg";
 
 const IS_LOCAL =
   ["localhost", "127.0.0.1"].includes(
@@ -478,22 +482,25 @@ function CommunityDashboard({onStaffLogin}){
     <div className="community-page">
       {page==="home"&&
         <div className="page-stack">
-          <section className="community-hero">
-            <Badge tone="green">WELCOME TO BAY CAFÉ</Badge>
-            <h1>Community starts at <em>the Bay.</em></h1>
-            <p>
-              No login needed. Explore official announcements, open Careers,
-              and community information.
-            </p>
-
-            <div className="button-row">
-              <button className="primary-btn" onClick={()=>setPage("careers")}>
-                View Careers<ChevronRight size={15}/>
-              </button>
-
-              <button className="secondary-btn" onClick={()=>setPage("announcements")}>
-                Announcements<Megaphone size={14}/>
-              </button>
+          <section className="community-hero community-hero-rich">
+            <div className="community-hero-copy">
+              <Badge tone="green">WELCOME TO BAY CAFÉ</Badge>
+              <h1>Community starts at <em>the Bay.</em></h1>
+              <p>No login needed. Explore announcements, Careers, birthdays, community updates, and more.</p>
+              <div className="button-row">
+                <button className="primary-btn" onClick={()=>setPage("careers")}>View Careers<ChevronRight size={15}/></button>
+                <button className="secondary-btn" onClick={()=>setPage("announcements")}>Announcements<Megaphone size={14}/></button>
+              </div>
+              <div className="community-mini-stats">
+                <span><strong>{careers.length}</strong> Open Careers</span>
+                <span><strong>{announcements.length}</strong> Updates</span>
+                <span><strong>{birthdays.length}</strong> Birthdays</span>
+              </div>
+            </div>
+            <div className="community-hero-art">
+              <img src={bayHeroArt} alt="Bay Café beach illustration"/>
+              <div className="hero-art-chip chip-one"><Waves size={13}/>Coastal Community</div>
+              <div className="hero-art-chip chip-two"><Coffee size={13}/>Sip. Relax. Enjoy.</div>
             </div>
           </section>
 
@@ -508,10 +515,15 @@ function CommunityDashboard({onStaffLogin}){
             </section>
           }
 
-          <section className="community-quick-grid">
-            <article><Megaphone size={18}/><div><strong>Official Updates</strong><span>Read the newest Bay Café announcements.</span></div><button onClick={()=>setPage("announcements")}>View</button></article>
-            <article><BriefcaseBusiness size={18}/><div><strong>Join the Team</strong><span>Explore Corporate, Management, and Directing applications.</span></div><button onClick={()=>setPage("careers")}>Explore</button></article>
-            <article><Cake size={18}/><div><strong>Birthdays</strong><span>Celebrate community members and upcoming birthdays.</span></div><button onClick={()=>setPage("birthdays")}>Celebrate</button></article>
+          <section className="community-feature-grid">
+            <article className="community-feature-card feature-careers"><img src={careersArt} alt="Careers"/><div className="community-feature-content"><BriefcaseBusiness size={18}/><span className="eyebrow">OPPORTUNITIES</span><h3>Join the Bay Café team.</h3><p>Explore Corporate, Management, and Directing applications.</p><button onClick={()=>setPage("careers")}>Explore Careers<ChevronRight size={13}/></button></div></article>
+            <article className="community-feature-card feature-community"><img src={communityArt} alt="Community"/><div className="community-feature-content"><Megaphone size={18}/><span className="eyebrow">COMMUNITY</span><h3>Stay in the loop.</h3><p>See official announcements, updates, and community news.</p><button onClick={()=>setPage("announcements")}>View Updates<ChevronRight size={13}/></button></div></article>
+            <article className="community-feature-card feature-birthday"><img src={sunsetArt} alt="Sunset"/><div className="community-feature-content"><Cake size={18}/><span className="eyebrow">CELEBRATIONS</span><h3>Celebrate the community.</h3><p>Keep up with birthdays and special moments around the Bay.</p><button onClick={()=>setPage("birthdays")}>View Birthdays<ChevronRight size={13}/></button></div></article>
+          </section>
+
+          <section className="community-color-banner">
+            <div><span className="eyebrow">THE BAY EXPERIENCE</span><h2>More than a café.</h2><p>A community built around creativity, leadership, events, careers, and a relaxed beachside identity.</p></div>
+            <div className="community-color-dots"><span/><span/><span/><span/><span/></div>
           </section>
 
           <section>
@@ -647,6 +659,11 @@ function CommunityDashboard({onStaffLogin}){
             title="Welcome to Bay Café."
             text="A Roblox café community centered around service, leadership, development, and a place people enjoy returning to."
           />
+          <div className="about-visual-strip">
+            <img src={bayHeroArt} alt="Bay Café coast"/>
+            <img src={communityArt} alt="Bay Café community"/>
+            <img src={sunsetArt} alt="Bay Café sunset"/>
+          </div>
 
           <div className="community-info-grid">
             <article>
