@@ -638,21 +638,28 @@ app.get(
   "/api/profiles/search",
   auth,
   async (req,res) => {
-    try {
-      const query=String(req.query.q||"")
-        .trim()
-        .toLowerCase();
+    const query=String(req.query.q||"")
+      .trim()
+      .toLowerCase();
 
-      if(!query){
-        return res.json({
-          success:true,
-          results:[]
-        });
+    if(!query){
+      return res.json({
+        success:true,
+        results:[]
+      });
+    }
+
+    try {
+      let directory=[];
+
+      try{
+        directory=await bayCafeDirectory({allowStale:true});
+      }catch(error){
+        console.warn(`[Bay Café] Profile directory lookup failed: ${error.message}`);
+        directory=[];
       }
 
-      const directory=await bayCafeDirectory();
-
-      const results=directory
+      let results=directory
         .map(item=>{
           const username=String(item.username||"").toLowerCase();
           const displayName=String(item.displayName||"").toLowerCase();
@@ -694,6 +701,48 @@ app.get(
         })
         .slice(0,20);
 
+      /*
+       * If the full group directory is temporarily unavailable and there is no
+       * persistent cache yet, try Roblox's user search for queries with at
+       * least two characters. Then keep only users who are actually in Bay Café.
+       */
+      if(!results.length&&directory.length===0&&query.length>=2){
+        try{
+          const searchResponse=await jsonFetch(
+            `https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(query)}&limit=10`,
+            {},
+            20_000
+          );
+
+          const candidates=Array.isArray(searchResponse?.data)
+            ? searchResponse.data
+            : [];
+
+          const checked=await Promise.all(
+            candidates.map(async candidate=>{
+              try{
+                const membership=await groupMembership(candidate.id);
+                if(!membership)return null;
+
+                return {
+                  id:candidate.id,
+                  username:candidate.name,
+                  displayName:candidate.displayName,
+                  roleName:membership.role?.name||"Member",
+                  roleRank:membership.role?.rank||0
+                };
+              }catch{
+                return null;
+              }
+            })
+          );
+
+          results=checked.filter(Boolean).slice(0,20);
+        }catch(error){
+          console.warn(`[Bay Café] Roblox fallback profile search failed: ${error.message}`);
+        }
+      }
+
       const hydrated=await Promise.all(
         results.map(async item=>({
           id:item.id,
@@ -705,21 +754,104 @@ app.get(
         }))
       );
 
-      res.json({
+      return res.json({
         success:true,
-        results:hydrated
+        results:hydrated,
+        directoryAvailable:directory.length>0
       });
     } catch(error) {
-      res.status(400).json({
-        success:false,
-        message:error.message||"Profile search failed."
+      /*
+       * Profile search should never take the entire page down because Roblox
+       * rate-limited or temporarily failed. Return an empty successful result
+       * instead of Request failed (400).
+       */
+      console.error(`[Bay Café] Profile search error: ${error.message}`);
+
+      return res.json({
+        success:true,
+        results:[],
+        directoryAvailable:false,
+        warning:"Roblox profile data is temporarily unavailable. Try again shortly."
       });
     }
   }
 );
+app.get("/api/profiles/:username",auth,async(req,res)=>{
+  const requested=String(req.params.username||"").trim();
 
-app.get("/api/profiles/:username",auth,async(req,res)=>{try{const user=await robloxUserByUsername(req.params.username);if(!user)return res.status(404).json({success:false,message:"Roblox user not found."});const [details,membership,avatar]=await Promise.all([robloxUserDetails(user.id),groupMembership(user.id),avatarForUser(user.id)]);res.json({success:true,profile:{id:user.id,username:user.name,displayName:user.displayName,description:details.description||"",avatar,profileUrl:`https://www.roblox.com/users/${user.id}/profile`,inGroup:Boolean(membership),roleName:membership?.role?.name||"Not in Bay Café",roleRank:membership?.role?.rank||0}});}catch(error){res.status(400).json({success:false,message:error.message||"Profile lookup failed."});}});
+  try{
+    let user=null;
 
+    try{
+      user=await robloxUserByUsername(requested);
+    }catch(error){
+      console.warn(`[Bay Café] Roblox username lookup failed: ${error.message}`);
+    }
+
+    if(!user){
+      try{
+        const directory=await bayCafeDirectory({allowStale:true});
+        const match=directory.find(item=>
+          String(item.username||"").toLowerCase()===requested.toLowerCase()||
+          String(item.displayName||"").toLowerCase()===requested.toLowerCase()
+        );
+
+        if(match){
+          return res.json({
+            success:true,
+            profile:{
+              id:match.id,
+              username:match.username,
+              displayName:match.displayName,
+              description:"",
+              avatar:await avatarForUser(match.id).catch(()=>""),
+              profileUrl:`https://www.roblox.com/users/${match.id}/profile`,
+              inGroup:true,
+              roleName:match.roleName||"Member",
+              roleRank:match.roleRank||0,
+              cached:true
+            }
+          });
+        }
+      }catch{}
+    }
+
+    if(!user){
+      return res.status(404).json({
+        success:false,
+        message:"Roblox user not found."
+      });
+    }
+
+    const [details,membership,avatar]=await Promise.all([
+      robloxUserDetails(user.id).catch(()=>({description:""})),
+      groupMembership(user.id).catch(()=>null),
+      avatarForUser(user.id).catch(()=>"")
+    ]);
+
+    return res.json({
+      success:true,
+      profile:{
+        id:user.id,
+        username:user.name,
+        displayName:user.displayName,
+        description:details?.description||"",
+        avatar,
+        profileUrl:`https://www.roblox.com/users/${user.id}/profile`,
+        inGroup:Boolean(membership),
+        roleName:membership?.role?.name||"Not in Bay Café",
+        roleRank:membership?.role?.rank||0
+      }
+    });
+  }catch(error){
+    console.error(`[Bay Café] Profile lookup error: ${error.message}`);
+
+    return res.status(503).json({
+      success:false,
+      message:"Roblox profile data is temporarily unavailable. Please try again shortly."
+    });
+  }
+});
 const liveClients=new Set();
 function broadcast(type,payload){const msg=`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`;for(const client of liveClients){try{client.write(msg);}catch{liveClients.delete(client);}}}
 app.get("/api/live",(req,res)=>{const user=verifySessionToken(String(req.query.token||"").trim());if(!user)return res.status(401).json({success:false,message:"Sign in required."});res.setHeader("Content-Type","text/event-stream");res.setHeader("Cache-Control","no-cache, no-transform");res.setHeader("Connection","keep-alive");res.flushHeaders?.();res.write(`event: connected\ndata: ${JSON.stringify({at:new Date().toISOString()})}\n\n`);liveClients.add(res);const heartbeat=setInterval(()=>res.write(": heartbeat\n\n"),25000);req.on("close",()=>{clearInterval(heartbeat);liveClients.delete(res);});});
