@@ -1204,28 +1204,28 @@ function Overview({user,stats,discordMessages,announcements,navigate}){
 
     <section>
       <SectionHead
-        kicker="LIVE BAY DATA"
-        title="At a glance."
-        text="Live Roblox and Discord integration status."
+        kicker="YOUR DASHBOARD"
+        title="Quick look"
+        text="A few things you might want to check before you get started."
       />
       <div className="metrics-grid">
         <article>
           <Users size={18}/>
-          <span>COMMUNITY</span>
+          <span>GROUP MEMBERS</span>
           <strong>{formatNumber(stats?.group?.memberCount)}</strong>
-          <p>Roblox members</p>
+          <p>In the Roblox group</p>
         </article>
         <article>
           <MessageCircleMore size={18}/>
           <span>YOUR MESSAGES</span>
           <strong>{formatNumber(discordMessages.length)}</strong>
-          <p>This week</p>
+          <p>Since Monday</p>
         </article>
         <article>
           <Activity size={18}/>
-          <span>DISCORD</span>
-          <strong>{stats?.discord?.connected?"LIVE":"OFFLINE"}</strong>
-          <p>Tracker connection</p>
+          <span>TRACKER</span>
+          <strong>{stats?.discord?.connected?"ONLINE":"OFFLINE"}</strong>
+          <p>Discord connection</p>
         </article>
       </div>
     </section>
@@ -2399,7 +2399,7 @@ function Profiles({token}){
                   <ChevronRight size={14}/>
                 </button>
               )
-              : <div className="suggestion-empty">No matching Bay Café members.</div>
+              : <div className="suggestion-empty">No Bay Café member found with that name.</div>
           }
         </div>
       }

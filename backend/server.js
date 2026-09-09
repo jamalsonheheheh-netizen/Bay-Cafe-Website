@@ -749,20 +749,36 @@ app.get(
        * persistent cache yet, try Roblox's user search for queries with at
        * least two characters. Then keep only users who are actually in Bay Café.
        */
-      if(!results.length&&directory.length===0&&query.length>=2){
+      if(!results.length&&query.length>=2){
         try{
-          const searchResponse=await jsonFetch(
-            `https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(query)}&limit=10`,
-            {},
-            20_000
-          );
+          const [searchResponse,exactUser]=await Promise.all([
+            jsonFetch(
+              `https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(query)}&limit=10`,
+              {},
+              20_000
+            ).catch(()=>({data:[]})),
+            robloxUserByUsername(query).catch(()=>null)
+          ]);
 
-          const candidates=Array.isArray(searchResponse?.data)
-            ? searchResponse.data
-            : [];
+          const candidates=[
+            ...(exactUser?[{
+              id:exactUser.id,
+              name:exactUser.name,
+              displayName:exactUser.displayName
+            }]:[]),
+            ...(Array.isArray(searchResponse?.data)?searchResponse.data:[])
+          ];
+
+          const uniqueCandidates=[
+            ...new Map(
+              candidates
+                .filter(candidate=>candidate?.id)
+                .map(candidate=>[String(candidate.id),candidate])
+            ).values()
+          ];
 
           const checked=await Promise.all(
-            candidates.map(async candidate=>{
+            uniqueCandidates.map(async candidate=>{
               try{
                 const membership=await groupMembership(candidate.id);
                 if(!membership)return null;
@@ -780,7 +796,25 @@ app.get(
             })
           );
 
-          results=checked.filter(Boolean).slice(0,20);
+          results=checked
+            .filter(Boolean)
+            .sort((a,b)=>{
+              const aUser=String(a.username||"").toLowerCase();
+              const bUser=String(b.username||"").toLowerCase();
+              const aDisplay=String(a.displayName||"").toLowerCase();
+              const bDisplay=String(b.displayName||"").toLowerCase();
+
+              const aExact=aUser===query||aDisplay===query;
+              const bExact=bUser===query||bDisplay===query;
+              if(aExact!==bExact)return aExact?-1:1;
+
+              const aPrefix=aUser.startsWith(query)||aDisplay.startsWith(query);
+              const bPrefix=bUser.startsWith(query)||bDisplay.startsWith(query);
+              if(aPrefix!==bPrefix)return aPrefix?-1:1;
+
+              return aUser.localeCompare(bUser);
+            })
+            .slice(0,20);
         }catch(error){
           console.warn(`[Bay Café] Roblox fallback profile search failed: ${error.message}`);
         }

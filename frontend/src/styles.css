@@ -2324,3 +2324,20 @@
     right:38px;
   }
 }
+
+
+/* V51 — more natural overview stats */
+.metrics-grid article{
+  border-radius:13px;
+  box-shadow:none;
+}
+
+.metrics-grid article>span{
+  letter-spacing:.04em;
+  font-size:8px;
+}
+
+.metrics-grid article>p{
+  font-size:9px;
+  color:#7fa2aa;
+}
