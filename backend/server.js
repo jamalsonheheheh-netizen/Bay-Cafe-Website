@@ -1128,15 +1128,144 @@ function saveActivitySettings(next){const value={...DEFAULT_ACTIVITY_SETTINGS,..
 function isLeadershipOrOwnership(user){return Number(user?.level||0)>=4||["leadership","ownership"].includes(String(user?.tier||"").toLowerCase());}
 function archiveCurrentActivity(reason,user){const weekStart=startOfCurrentWeek();const current=readJson(FILES.discordMessages,[]);const thisWeek=current.filter(item=>new Date(item.createdAt)>=weekStart);const archive=readJson(FILES.activityArchive,[]);archive.unshift({id:crypto.randomUUID(),reason:String(reason||"manual"),weekStart:weekStart.toISOString(),archivedAt:new Date().toISOString(),archivedBy:user?.username||"system",messageCount:thisWeek.length,messages:thisWeek});writeJson(FILES.activityArchive,archive.slice(0,20));}
 async function fetchRecentMessages(channel,limit=1000){const collected=[];let before;while(collected.length<limit){const batch=await channel.messages.fetch({limit:Math.min(100,limit-collected.length),...(before?{before}:{})}).catch(()=>null);if(!batch||!batch.size)break;const values=[...batch.values()];collected.push(...values);before=values[values.length-1]?.id;if(batch.size<100)break;}return collected;}
-async function rebuildDiscordHistory(){const guild=await trackedGuild();if(!guild)throw new Error("Discord guild is unavailable.");const channels=await guild.channels.fetch();const eligible=[...channels.values()].filter(ch=>ch?.isTextBased?.()&&!ch.isThread?.()&&!EXCLUDED_CHANNEL_IDS.has(String(ch.id))&&(!TRACK_CHANNEL_IDS.size||TRACK_CHANNEL_IDS.has(String(ch.id))));const merged=new Map();for(const ch of eligible){if(!ch?.messages?.fetch)continue;const messages=await fetchRecentMessages(ch,1000);for(const message of messages){if(shouldTrackMessage(message)){const record=discordRecord(message);merged.set(record.id,record);}}}const sorted=[...merged.values()].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,20000);writeJson(FILES.discordMessages,sorted);broadcast("discord:rebuild",{messageCount:sorted.length});return sorted.length;}
+async function rebuildDiscordHistory(){
+  const guild=await trackedGuild();
+  if(!guild)throw new Error("Discord guild is unavailable.");
+
+  const weekStart=startOfCurrentWeek();
+  const channels=await guild.channels.fetch();
+
+  const eligible=[...channels.values()].filter(
+    ch=>
+      ch?.isTextBased?.()&&
+      !ch.isThread?.()&&
+      !EXCLUDED_CHANNEL_IDS.has(String(ch.id))&&
+      (!TRACK_CHANNEL_IDS.size||TRACK_CHANNEL_IDS.has(String(ch.id)))
+  );
+
+  const previous=readJson(FILES.discordMessages,[]);
+  const beforeWeek=previous.filter(
+    item=>new Date(item.createdAt)<weekStart
+  );
+
+  const merged=new Map();
+
+  for(const ch of eligible){
+    if(!ch?.messages?.fetch)continue;
+
+    const messages=await fetchMessagesSince(
+      ch,
+      weekStart,
+      10000
+    );
+
+    for(const message of messages){
+      if(!shouldTrackMessage(message))continue;
+      const record=discordRecord(message);
+      merged.set(String(record.id),record);
+    }
+  }
+
+  const currentWeek=[...merged.values()]
+    .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+
+  const sorted=[...currentWeek,...beforeWeek]
+    .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))
+    .slice(0,30000);
+
+  writeJson(FILES.discordMessages,sorted);
+
+  broadcast("discord:rebuild",{
+    messageCount:currentWeek.length,
+    weekStart:weekStart.toISOString(),
+    timeZone:"America/New_York"
+  });
+
+  return currentWeek.length;
+}
+function timeZoneOffsetMs(date,timeZone="America/New_York"){
+  const formatter=new Intl.DateTimeFormat("en-US",{
+    timeZone,
+    year:"numeric",
+    month:"2-digit",
+    day:"2-digit",
+    hour:"2-digit",
+    minute:"2-digit",
+    second:"2-digit",
+    hourCycle:"h23"
+  });
+
+  const parts=Object.fromEntries(
+    formatter.formatToParts(date)
+      .filter(part=>part.type!=="literal")
+      .map(part=>[part.type,part.value])
+  );
+
+  const asUTC=Date.UTC(
+    Number(parts.year),
+    Number(parts.month)-1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second)
+  );
+
+  return asUTC-date.getTime();
+}
+
+function zonedMidnightUTC(year,month,day,timeZone="America/New_York"){
+  let guess=new Date(Date.UTC(year,month-1,day,0,0,0));
+
+  // Two passes handles DST boundaries correctly.
+  for(let i=0;i<2;i+=1){
+    const offset=timeZoneOffsetMs(guess,timeZone);
+    guess=new Date(Date.UTC(year,month-1,day,0,0,0)-offset);
+  }
+
+  return guess;
+}
+
 function startOfCurrentWeek(){
+  const timeZone="America/New_York";
   const now=new Date();
-  const day=now.getDay();
-  const diff=day===0?-6:1-day;
-  const start=new Date(now);
-  start.setDate(now.getDate()+diff);
-  start.setHours(0,0,0,0);
-  return start;
+
+  const formatter=new Intl.DateTimeFormat("en-US",{
+    timeZone,
+    year:"numeric",
+    month:"2-digit",
+    day:"2-digit",
+    weekday:"short"
+  });
+
+  const parts=Object.fromEntries(
+    formatter.formatToParts(now)
+      .filter(part=>part.type!=="literal")
+      .map(part=>[part.type,part.value])
+  );
+
+  const weekdayIndex={
+    Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6
+  }[parts.weekday];
+
+  const daysSinceMonday=weekdayIndex===0?6:weekdayIndex-1;
+
+  // Work in calendar dates first, then convert Monday midnight in New York to UTC.
+  const localDateAsUTC=new Date(Date.UTC(
+    Number(parts.year),
+    Number(parts.month)-1,
+    Number(parts.day)
+  ));
+
+  localDateAsUTC.setUTCDate(
+    localDateAsUTC.getUTCDate()-daysSinceMonday
+  );
+
+  return zonedMidnightUTC(
+    localDateAsUTC.getUTCFullYear(),
+    localDateAsUTC.getUTCMonth()+1,
+    localDateAsUTC.getUTCDate(),
+    timeZone
+  );
 }
 
 function normalizeIdentity(value){
@@ -1356,76 +1485,38 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
     console.error(`[Bay Café] Activity Management directory error: ${error.message}`);
   }
 
-  const membersByKey=new Map();
+  /*
+   * Message ownership is now based ONLY on Discord authorId.
+   *
+   * The previous implementation tried to connect Discord messages to Roblox
+   * members using username/display-name text. That could assign somebody's
+   * messages to the wrong person when names were similar or changed.
+   *
+   * We now group every tracked message by the immutable Discord user ID first.
+   * Roblox data is only used as optional profile/rank decoration when the
+   * Discord username exactly matches a Roblox username.
+   */
+  const directoryByUsername=new Map();
 
-  // First: Roblox directory members. This preserves zero-message members and
-  // rank-based requirements when Roblox and Discord names happen to match.
   for(const member of directory){
-    const team=activityTeamForRole(member.roleName);
-    if(!team)continue;
-
-    const names=new Set([
-      normalizeIdentity(member.username),
-      normalizeIdentity(member.displayName)
-    ]);
-
-    const messages=thisWeek.filter(message=>
-      [
-        normalizeIdentity(message.authorUsername),
-        normalizeIdentity(message.authorName)
-      ].some(value=>value&&names.has(value))
-    );
-
-    const requirement=activityRequirementFor(
-      {roleName:member.roleName},
-      settings
-    );
-
-    const matchedAuthorId=messages[0]?.authorId||"";
-    const key=matchedAuthorId
-      ? `discord:${matchedAuthorId}`
-      : `roblox:${member.id}`;
-
-    membersByKey.set(key,{
-      id:matchedAuthorId||`roblox-${member.id}`,
-      robloxId:member.id,
-      discordId:matchedAuthorId,
-      username:messages[0]?.authorUsername||member.username,
-      displayName:messages[0]?.authorName||member.displayName,
-      robloxUsername:member.username,
-      roleName:member.roleName,
-      roleRank:member.roleRank,
-      team,
-      messageCount:messages.length,
-      requirement,
-      meetsRequirement:messages.length>=requirement,
-      avatar:messages[0]?.authorAvatar||"",
-      matchedBy:messages.length?"name":"roblox-directory",
-      messages:messages.slice(0,500).map(message=>({
-        id:message.id,
-        channelId:message.channelId,
-        channelName:message.channelName,
-        content:message.content,
-        createdAt:message.createdAt,
-        url:message.url
-      }))
-    });
+    const username=String(member.username||"").trim().toLowerCase();
+    if(username&&!directoryByUsername.has(username)){
+      directoryByUsername.set(username,member);
+    }
   }
 
-  // Second: every Discord author who actually sent a tracked message this week.
-  // This fixes the old bug where someone disappeared from Activity Management
-  // when their Discord username/display name did not match their Roblox name.
   const discordAuthors=new Map();
 
   for(const message of thisWeek){
-    if(!message.authorId)continue;
+    const authorId=String(message.authorId||"").trim();
+    if(!authorId)continue;
 
-    const current=discordAuthors.get(String(message.authorId))||{
-      authorId:String(message.authorId),
+    const current=discordAuthors.get(authorId)||{
+      authorId,
       authorUsername:message.authorUsername||"",
       authorName:message.authorName||message.authorUsername||"",
       authorAvatar:message.authorAvatar||"",
-      roleNames:Array.isArray(message.authorRoleNames)?message.authorRoleNames:[],
+      roleNames:[],
       messages:[]
     };
 
@@ -1438,66 +1529,60 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
     }
 
     current.messages.push(message);
-    discordAuthors.set(String(message.authorId),current);
+    discordAuthors.set(authorId,current);
   }
 
+  const members=[];
+  const matchedRobloxIds=new Set();
+
   for(const author of discordAuthors.values()){
-    const team=activityTeamFromDiscordRoles(author.roleNames);
+    const exactRobloxMatch=directoryByUsername.get(
+      String(author.authorUsername||"").trim().toLowerCase()
+    )||null;
 
-    // Only add unmatched authors when their Discord roles identify them as one
-    // of the tracked teams. Existing Roblox/name matches are enriched below.
-    const key=`discord:${author.authorId}`;
-    const existing=membersByKey.get(key);
+    const teamFromDiscord=activityTeamFromDiscordRoles(author.roleNames);
+    const teamFromRoblox=exactRobloxMatch
+      ? activityTeamForRole(exactRobloxMatch.roleName)
+      : null;
 
-    if(existing){
-      existing.messages=author.messages.slice(0,500).map(message=>({
-        id:message.id,
-        channelId:message.channelId,
-        channelName:message.channelName,
-        content:message.content,
-        createdAt:message.createdAt,
-        url:message.url
-      }));
-      existing.messageCount=author.messages.length;
-      existing.avatar=author.authorAvatar||existing.avatar;
-      existing.username=author.authorUsername||existing.username;
-      existing.displayName=author.authorName||existing.displayName;
-      existing.discordRoleNames=author.roleNames;
-      existing.matchedBy="discord-id";
-      existing.meetsRequirement=existing.messageCount>=existing.requirement;
-      continue;
-    }
-
+    const team=teamFromDiscord||teamFromRoblox;
     if(!team)continue;
 
-    const requirement=activityRequirementFromRoleNames(author.roleNames,settings);
+    if(exactRobloxMatch){
+      matchedRobloxIds.add(String(exactRobloxMatch.id));
+    }
 
-    membersByKey.set(key,{
+    const roleName=
+      exactRobloxMatch?.roleName||
+      author.roleNames.find(role=>
+        activityTeamFromDiscordRoles([role])===team
+      )||
+      `${team} Team`;
+
+    const requirement=exactRobloxMatch
+      ? activityRequirementFor({roleName:exactRobloxMatch.roleName},settings)
+      : activityRequirementFromRoleNames(author.roleNames,settings);
+
+    const authorMessages=[...author.messages]
+      .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+
+    members.push({
       id:author.authorId,
-      robloxId:null,
       discordId:author.authorId,
+      robloxId:exactRobloxMatch?.id||null,
       username:author.authorUsername,
       displayName:author.authorName,
-      robloxUsername:"",
-      roleName:
-        author.roleNames.find(role=>
-          activityTeamForRole(role)===team
-        )||
-        author.roleNames.find(role=>
-          activityTeamFromDiscordRoles([role])===team
-        )||
-        `${team} Team`,
-      roleRank:0,
+      robloxUsername:exactRobloxMatch?.username||"",
+      roleName,
+      roleRank:exactRobloxMatch?.roleRank||0,
       team,
-      messageCount:author.messages.length,
+      messageCount:authorMessages.length,
       requirement,
-      meetsRequirement:requirement>0
-        ? author.messages.length>=requirement
-        : true,
+      meetsRequirement:authorMessages.length>=requirement,
       avatar:author.authorAvatar,
       discordRoleNames:author.roleNames,
-      matchedBy:"discord-role",
-      messages:author.messages.slice(0,500).map(message=>({
+      matchedBy:exactRobloxMatch?"exact-username":"discord-id",
+      messages:authorMessages.slice(0,500).map(message=>({
         id:message.id,
         channelId:message.channelId,
         channelName:message.channelName,
@@ -1508,14 +1593,56 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
     });
   }
 
-  const members=[...membersByKey.values()]
-    .sort((a,b)=>{
-      const teamOrder={Corporate:0,Management:1,Directing:2};
-      const teamDiff=(teamOrder[a.team]??9)-(teamOrder[b.team]??9);
-      if(teamDiff)return teamDiff;
-      if((b.roleRank||0)!==(a.roleRank||0))return (b.roleRank||0)-(a.roleRank||0);
-      return String(a.username||"").localeCompare(String(b.username||""));
+  /*
+   * Preserve zero-message Roblox members so Leadership can still see the whole
+   * Corporate / Management / Directing roster. We do NOT attach messages to
+   * these entries by display-name guessing.
+   */
+  for(const member of directory){
+    const team=activityTeamForRole(member.roleName);
+    if(!team)continue;
+    if(matchedRobloxIds.has(String(member.id)))continue;
+
+    const requirement=activityRequirementFor(
+      {roleName:member.roleName},
+      settings
+    );
+
+    members.push({
+      id:`roblox-${member.id}`,
+      discordId:"",
+      robloxId:member.id,
+      username:member.username,
+      displayName:member.displayName,
+      robloxUsername:member.username,
+      roleName:member.roleName,
+      roleRank:member.roleRank,
+      team,
+      messageCount:0,
+      requirement,
+      meetsRequirement:requirement===0,
+      avatar:"",
+      discordRoleNames:[],
+      matchedBy:"roblox-directory",
+      messages:[]
     });
+  }
+
+  members.sort((a,b)=>{
+    const teamOrder={Corporate:0,Management:1,Directing:2};
+    const teamDiff=(teamOrder[a.team]??9)-(teamOrder[b.team]??9);
+    if(teamDiff)return teamDiff;
+
+    if((b.messageCount||0)!==(a.messageCount||0)){
+      return (b.messageCount||0)-(a.messageCount||0);
+    }
+
+    if((b.roleRank||0)!==(a.roleRank||0)){
+      return (b.roleRank||0)-(a.roleRank||0);
+    }
+
+    return String(a.username||"").localeCompare(String(b.username||""));
+  });
 
   // Always return the page data even if Roblox's public group API is having a
   // temporary problem. This prevents the whole Activity Management screen from
@@ -1529,7 +1656,9 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
     sync:{
       lastSyncedAt:activityLastSyncedAt,
       running:activitySyncRunning,
-      intervalSeconds:60
+      intervalSeconds:60,
+      weekTimeZone:"America/New_York",
+      identityMode:"discord-author-id"
     },
     directory:{
       available:directory.length>0,
