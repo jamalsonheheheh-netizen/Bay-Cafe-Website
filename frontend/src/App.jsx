@@ -484,9 +484,9 @@ function CommunityDashboard({onStaffLogin}){
         <div className="page-stack">
           <section className="community-hero community-hero-rich">
             <div className="community-hero-copy">
-              <Badge tone="green">WELCOME TO BAY CAFÉ</Badge>
-              <h1>Community starts at <em>the Bay.</em></h1>
-              <p>No login needed. Explore announcements, Careers, birthdays, community updates, and more.</p>
+              <span className="home-label">Bay Café</span>
+              <h1>Welcome to <em>the Bay.</em></h1>
+              <p>Grab a drink, catch up with the community, check what's new, or see where you can get involved.</p>
               <div className="button-row">
                 <button className="primary-btn" onClick={()=>setPage("careers")}>View Careers<ChevronRight size={15}/></button>
                 <button className="secondary-btn" onClick={()=>setPage("announcements")}>Announcements<Megaphone size={14}/></button>
@@ -499,8 +499,8 @@ function CommunityDashboard({onStaffLogin}){
             </div>
             <div className="community-hero-art">
               <img src={bayHeroArt} alt="Bay Café beach illustration"/>
-              <div className="hero-art-chip chip-one"><Waves size={13}/>Coastal Community</div>
-              <div className="hero-art-chip chip-two"><Coffee size={13}/>Sip. Relax. Enjoy.</div>
+              <div className="hero-art-chip chip-one"><Waves size={13}/>By the water</div>
+              <div className="hero-art-chip chip-two"><Coffee size={13}/>Bay Café</div>
             </div>
           </section>
 
@@ -516,13 +516,13 @@ function CommunityDashboard({onStaffLogin}){
           }
 
           <section className="community-feature-grid">
-            <article className="community-feature-card feature-careers"><img src={careersArt} alt="Careers"/><div className="community-feature-content"><BriefcaseBusiness size={18}/><span className="eyebrow">OPPORTUNITIES</span><h3>Join the Bay Café team.</h3><p>Explore Corporate, Management, and Directing applications.</p><button onClick={()=>setPage("careers")}>Explore Careers<ChevronRight size={13}/></button></div></article>
-            <article className="community-feature-card feature-community"><img src={communityArt} alt="Community"/><div className="community-feature-content"><Megaphone size={18}/><span className="eyebrow">COMMUNITY</span><h3>Stay in the loop.</h3><p>See official announcements, updates, and community news.</p><button onClick={()=>setPage("announcements")}>View Updates<ChevronRight size={13}/></button></div></article>
-            <article className="community-feature-card feature-birthday"><img src={sunsetArt} alt="Sunset"/><div className="community-feature-content"><Cake size={18}/><span className="eyebrow">CELEBRATIONS</span><h3>Celebrate the community.</h3><p>Keep up with birthdays and special moments around the Bay.</p><button onClick={()=>setPage("birthdays")}>View Birthdays<ChevronRight size={13}/></button></div></article>
+            <article className="community-feature-card feature-careers"><img src={careersArt} alt="Careers"/><div className="community-feature-content"><BriefcaseBusiness size={18}/><span className="card-kicker">Careers</span><h3>Want to work with us?</h3><p>See what positions are open and apply when you're ready.</p><button onClick={()=>setPage("careers")}>Explore Careers<ChevronRight size={13}/></button></div></article>
+            <article className="community-feature-card feature-community"><img src={communityArt} alt="Community"/><div className="community-feature-content"><Megaphone size={18}/><span className="card-kicker">Updates</span><h3>See what's happening.</h3><p>Announcements, changes, events, and anything else you should know.</p><button onClick={()=>setPage("announcements")}>View Updates<ChevronRight size={13}/></button></div></article>
+            <article className="community-feature-card feature-birthday"><img src={sunsetArt} alt="Sunset"/><div className="community-feature-content"><Cake size={18}/><span className="card-kicker">Birthdays</span><h3>Who's celebrating?</h3><p>Take a look at upcoming birthdays around the community.</p><button onClick={()=>setPage("birthdays")}>View Birthdays<ChevronRight size={13}/></button></div></article>
           </section>
 
           <section className="community-color-banner">
-            <div><span className="eyebrow">THE BAY EXPERIENCE</span><h2>More than a café.</h2><p>A community built around creativity, leadership, events, careers, and a relaxed beachside identity.</p></div>
+            <div><span className="home-label">Around the Bay</span><h2>There's always something going on.</h2><p>From events and staff opportunities to updates and community moments, this is where everything comes together.</p></div>
             <div className="community-color-dots"><span/><span/><span/><span/><span/></div>
           </section>
 
@@ -1134,11 +1134,10 @@ function Overview({user,stats,discordMessages,announcements,navigate}){
       <article className="hero-card staff-hero-rich">
         <div className="hero-waterline"/>
         <div className="staff-hero-copy">
-          <Badge>STAFF WORKSPACE</Badge>
-          <h1>Welcome back,<em>{user.displayName}.</em></h1>
+          <span className="home-label">Staff Hub</span>
+          <h1>Hey, <em>{user.displayName}.</em></h1>
           <p>
-            You are signed in as <strong>{user.roleName}</strong>. Your Bay Café workspace
-            automatically changes with your rank and responsibilities.
+            You're signed in as <strong>{user.roleName}</strong>. Everything you need for your role is right here.
           </p>
           <div className="button-row">
             <button className="primary-btn" onClick={()=>navigate("announcements")}>
@@ -1151,7 +1150,7 @@ function Overview({user,stats,discordMessages,announcements,navigate}){
         </div>
         <div className="staff-hero-visual">
           <img src={sunsetArt} alt="Bay Café sunset"/>
-          <div className="staff-hero-floating"><Coffee size={14}/>Staff at the Bay</div>
+          <div className="staff-hero-floating"><Coffee size={14}/>Bay Café Staff</div>
         </div>
       </article>
 
@@ -1174,15 +1173,15 @@ function Overview({user,stats,discordMessages,announcements,navigate}){
     <section className="staff-visual-shortcuts">
       <button onClick={()=>navigate("discord")} className="staff-shortcut shortcut-activity">
         <img src={communityArt} alt="Community activity"/>
-        <div><MessageCircleMore size={17}/><strong>Community Activity</strong><span>See your tracked messages and weekly progress.</span></div>
+        <div><MessageCircleMore size={17}/><strong>Your activity</strong><span>Check what you've sent this week.</span></div>
       </button>
       <button onClick={()=>navigate("careers")} className="staff-shortcut shortcut-careers">
         <img src={careersArt} alt="Careers"/>
-        <div><BriefcaseBusiness size={17}/><strong>Careers</strong><span>Browse open opportunities and applications.</span></div>
+        <div><BriefcaseBusiness size={17}/><strong>Careers</strong><span>See what's open right now.</span></div>
       </button>
       <button onClick={()=>navigate("information")} className="staff-shortcut shortcut-info">
         <img src={bayHeroArt} alt="Bay Café information"/>
-        <div><BookOpen size={17}/><strong>Information Hub</strong><span>Policies, expectations, and Bay Café resources.</span></div>
+        <div><BookOpen size={17}/><strong>Staff info</strong><span>Guides, expectations, and useful links.</span></div>
       </button>
     </section>
 
@@ -1912,6 +1911,7 @@ function ActivityAdminPage({token,setToast}){
   const[requirements,setRequirements]=useState({});
   const[teamFilter,setTeamFilter]=useState("All");
   const[expanded,setExpanded]=useState(null);
+  const[rebuildStatus,setRebuildStatus]=useState("");
 
   const load=async()=>{
     const result=await api("/api/activity/admin",{},token);
@@ -1966,12 +1966,25 @@ function ActivityAdminPage({token,setToast}){
   };
 
   const rebuild=async()=>{
+    if(!window.confirm("Fully rebuild this week's activity from Discord? Current-week stored records will be replaced with a fresh scan from Monday."))return;
+
     setLoading(true);
+    setRebuildStatus("Clearing this week's stored activity and rescanning Discord from Monday...");
+
     try{
       const result=await api("/api/activity/rebuild",{method:"POST"},token);
-      setToast(`Activity rebuilt: ${result.messageCount||0} messages tracked.`);
+
+      setRebuildStatus(
+        `Rebuild complete — ${result.afterThisWeek||result.messageCount||0} messages found this week.`
+      );
+
+      setToast(
+        `Activity rebuilt: ${result.oldThisWeek||0} old records replaced with ${result.afterThisWeek||result.messageCount||0} fresh Discord messages.`
+      );
+
       await load();
     }catch(error){
+      setRebuildStatus(`Rebuild failed — ${error.message}`);
       setToast(error.message);
     }finally{
       setLoading(false);
@@ -2164,12 +2177,18 @@ function ActivityAdminPage({token,setToast}){
         </button>
       </article>
 
-      <article className="activity-admin-card">
+      <article className="activity-admin-card rebuild-card">
         <h3>Rebuild activity</h3>
-        <p>Re-scan recent Discord history and rebuild stored records.</p>
+        <p>Deletes this week's stored activity and performs a fresh Discord scan from Monday at 12:00 AM Eastern.</p>
         <button className="primary-btn" onClick={rebuild} disabled={loading}>
-          Rebuild Activity
+          {loading&&rebuildStatus?"Rebuilding...":"Rebuild Activity"}
         </button>
+        {rebuildStatus&&
+          <div className={`rebuild-status ${rebuildStatus.startsWith("Rebuild failed")?"error":""}`}>
+            {loading&&<span className="rebuild-spinner"/>}
+            <span>{rebuildStatus}</span>
+          </div>
+        }
       </article>
 
       <article className="activity-admin-card danger">

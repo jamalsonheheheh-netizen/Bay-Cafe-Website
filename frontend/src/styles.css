@@ -2011,3 +2011,69 @@
     align-items:flex-start;
   }
 }
+
+
+/* V43 — visible activity rebuild progress */
+.rebuild-status{
+  margin-top:12px;
+  padding:10px 11px;
+  border:1px solid rgba(117,230,218,.15);
+  border-radius:10px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  background:rgba(117,230,218,.045);
+  color:#bdf7f2;
+  font-size:8px;
+  line-height:1.45;
+}
+
+.rebuild-status.error{
+  border-color:rgba(251,155,143,.18);
+  background:rgba(251,155,143,.055);
+  color:#ffd8d2;
+}
+
+.rebuild-spinner{
+  width:12px;
+  height:12px;
+  flex:0 0 auto;
+  border:2px solid rgba(255,255,255,.12);
+  border-top-color:#75e6da;
+  border-radius:50%;
+  animation:rebuildSpin .8s linear infinite;
+}
+
+@keyframes rebuildSpin{
+  to{transform:rotate(360deg)}
+}
+
+/* V47 - less templated, more natural */
+.home-label,.card-kicker{display:inline-flex;width:max-content;color:#9edee8;font-size:10px;font-weight:700;letter-spacing:.02em}
+.card-kicker{margin-top:1px;color:#a8c6cd;font-size:9px}
+.community-hero-rich,.official-about-hero,.staff-hero-rich{border-radius:18px}
+.community-hero-rich{background:linear-gradient(135deg,rgba(8,45,59,.98),rgba(8,36,47,.95))}
+.community-mini-stats{gap:14px}
+.community-mini-stats span{padding:0;border:0;background:transparent;font-size:9px}
+.community-feature-card{border-radius:15px;box-shadow:none;transition:transform .18s ease,border-color .18s ease}
+.community-feature-card:hover{transform:translateY(-3px);border-color:rgba(142,225,234,.22)}
+.community-feature-card>img{height:138px}
+.community-feature-content{padding:16px 16px 17px}
+.community-feature-card h3{margin-top:6px;font-size:17px;letter-spacing:-.02em}
+.community-feature-card p{min-height:0;font-size:10px}
+.community-feature-card button{width:auto;padding:0;min-height:auto;margin-top:14px;border:0;background:transparent;justify-content:flex-start;color:#9fe5ec;font-size:9px}
+.community-feature-card button:hover{background:transparent;color:#dffcff}
+.community-color-banner{min-height:132px;border-radius:16px;background:linear-gradient(110deg,#0c5267 0%,#126d75 46%,#6e607b 100%);box-shadow:none}
+.official-about-card,.staff-shortcut,.activity-member,.activity-admin-stats article{border-radius:14px;box-shadow:none}
+.support-card,.rules-card,.alliance-card{background:#082f3e}
+.handbook-links{border-radius:15px;background:#0a4356}
+.staff-hero-rich{background:linear-gradient(145deg,rgba(8,51,65,.95),rgba(6,34,45,.96))}
+.staff-shortcut{transition:transform .18s ease,border-color .18s ease}
+.staff-shortcut:hover{transform:translateY(-2px);border-color:rgba(132,220,232,.2)}
+.staff-shortcut img{height:96px}
+.eyebrow{letter-spacing:.07em}
+.section-head .eyebrow,.activity-admin-card .eyebrow{font-size:8px;letter-spacing:.06em;opacity:.8}
+.primary-btn,.secondary-btn{border-radius:10px;font-size:10px;letter-spacing:0}
+.primary-btn{background:#8ce2dc}
+.primary-btn:hover,.secondary-btn:hover{transform:none;filter:brightness(1.06)}
+@media(max-width:700px){.community-feature-card>img{height:170px}}
