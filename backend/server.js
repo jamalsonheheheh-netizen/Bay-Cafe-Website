@@ -308,10 +308,45 @@ async function robloxUserDetails(id){
 
 async function robloxUserDetailsFresh(id){
   return jsonFetch(
-    `https://users.roblox.com/v1/users/${id}`,
-    {},
+    `https://users.roblox.com/v1/users/${id}?bayVerify=${Date.now()}`,
+    {
+      headers:{
+        "Cache-Control":"no-cache, no-store",
+        "Pragma":"no-cache"
+      }
+    },
     0
   );
+}
+
+function normalizeVerificationText(value){
+  return String(value||"")
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\uFEFF]/g,"")
+    .replace(/[^A-Za-z0-9]/g,"")
+    .toUpperCase();
+}
+
+async function descriptionContainsVerificationCode(userId,code){
+  const expected=normalizeVerificationText(code);
+  let lastDescription="";
+
+  // Roblox profile descriptions can take a few seconds to propagate through
+  // their API/CDN. Retry automatically instead of immediately rejecting.
+  for(let attempt=0;attempt<6;attempt+=1){
+    const latest=await robloxUserDetailsFresh(userId);
+    lastDescription=String(latest?.description||"");
+
+    if(normalizeVerificationText(lastDescription).includes(expected)){
+      return true;
+    }
+
+    if(attempt<5){
+      await sleep(2000);
+    }
+  }
+
+  return false;
 }
 async function avatarForUser(id){
   const r=await jsonFetch(
@@ -485,13 +520,13 @@ app.post("/api/auth/start",async(req,res)=>{
     }
 
     const challengeId=crypto.randomUUID();
-    const code=`BAY-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+    const code=`BAYCAFE${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
 
     authChallenges.set(challengeId,{
       user,
       code,
       mode,
-      expiresAt:Date.now()+10*60*1000
+      expiresAt:Date.now()+20*60*1000
     });
 
     res.json({
@@ -520,10 +555,16 @@ app.post("/api/auth/verify",async(req,res)=>{
       throw new Error("Verification code expired. Start again.");
     }
 
-    const latest=await robloxUserDetailsFresh(c.user.id);
+    const verified=await descriptionContainsVerificationCode(
+      c.user.id,
+      c.code
+    );
 
-    if(!String(latest.description||"").includes(c.code)){
-      throw new Error("Code not found in your Roblox About section yet.");
+    if(!verified){
+      return res.status(409).json({
+        success:false,
+        message:"Roblox has not updated your About section in the API yet. Keep the code in your About, wait about 10–20 seconds, then press Verify again."
+      });
     }
 
     const user=await buildWebsiteUser(c.user.username,{allowGuest:c.mode==="community"});
