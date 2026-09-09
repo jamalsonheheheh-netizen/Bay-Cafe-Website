@@ -899,7 +899,28 @@ const liveClients=new Set();
 function broadcast(type,payload){const msg=`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`;for(const client of liveClients){try{client.write(msg);}catch{liveClients.delete(client);}}}
 app.get("/api/live",(req,res)=>{const user=verifySessionToken(String(req.query.token||"").trim());if(!user)return res.status(401).json({success:false,message:"Sign in required."});res.setHeader("Content-Type","text/event-stream");res.setHeader("Cache-Control","no-cache, no-transform");res.setHeader("Connection","keep-alive");res.flushHeaders?.();res.write(`event: connected\ndata: ${JSON.stringify({at:new Date().toISOString()})}\n\n`);liveClients.add(res);const heartbeat=setInterval(()=>res.write(": heartbeat\n\n"),25000);req.on("close",()=>{clearInterval(heartbeat);liveClients.delete(res);});});
 
-function shouldTrackMessage(message){if(!message?.guildId||!message?.id||message.author?.bot)return false;if(EXCLUDED_CHANNEL_IDS.has(String(message.channelId)))return false;if(TRACK_CHANNEL_IDS.size)return TRACK_CHANNEL_IDS.has(String(message.channelId));return true;}
+function shouldTrackMessage(message){
+  if(!message?.guildId||!message?.id||message.author?.bot)return false;
+
+  const channelId=String(message.channelId||"");
+  const parentId=String(message.channel?.parentId||"");
+
+  if(
+    EXCLUDED_CHANNEL_IDS.has(channelId)||
+    (parentId&&EXCLUDED_CHANNEL_IDS.has(parentId))
+  ){
+    return false;
+  }
+
+  if(TRACK_CHANNEL_IDS.size){
+    return (
+      TRACK_CHANNEL_IDS.has(channelId)||
+      (parentId&&TRACK_CHANNEL_IDS.has(parentId))
+    );
+  }
+
+  return true;
+}
 function discordRecord(message){
   const memberRoles=message.member?.roles?.cache
     ? [...message.member.roles.cache.values()]
@@ -932,7 +953,67 @@ function discordRecord(message){
     }))
   };
 }
-async function persistDiscordMessage(message){if(!shouldTrackMessage(message))return null;const items=readJson(FILES.discordMessages,[]),record=discordRecord(message);const next=[record,...items.filter(x=>x.id!==record.id)].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,20000);writeJson(FILES.discordMessages,next);broadcast("discord:message",record);return record;}
+
+async function resolveDiscordMemberForMessage(message){
+  if(message.member?.roles?.cache?.size){
+    return message.member;
+  }
+
+  const guild=message.guild||await trackedGuild();
+
+  if(!guild||!message.author?.id){
+    return message.member||null;
+  }
+
+  return guild.members.fetch(message.author.id).catch(()=>message.member||null);
+}
+
+async function discordRecordResolved(message){
+  const member=await resolveDiscordMemberForMessage(message);
+
+  const memberRoles=member?.roles?.cache
+    ? [...member.roles.cache.values()]
+        .filter(role=>role&&role.name!=="@everyone")
+    : [];
+
+  return {
+    id:message.id,
+    guildId:message.guildId,
+    channelId:message.channelId,
+    channelName:message.channel?.name||"unknown-channel",
+    content:message.content||"",
+    authorId:message.author.id,
+    authorName:member?.displayName||message.author.globalName||message.author.username,
+    authorUsername:message.author.username,
+    authorAvatar:message.author.displayAvatarURL({size:128}),
+    authorRoleNames:memberRoles.map(role=>role.name),
+    authorRoleIds:memberRoles.map(role=>String(role.id)),
+    createdAt:message.createdAt.toISOString(),
+    editedAt:message.editedAt?.toISOString()||null,
+    url:message.url,
+    attachments:[...message.attachments.values()].map(x=>({
+      id:x.id,
+      name:x.name,
+      url:x.url,
+      contentType:x.contentType||""
+    }))
+  };
+}
+
+async function persistDiscordMessage(message){
+  if(!shouldTrackMessage(message))return null;
+
+  const items=readJson(FILES.discordMessages,[]);
+  const record=await discordRecordResolved(message);
+
+  const next=[record,...items.filter(x=>x.id!==record.id)]
+    .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))
+    .slice(0,30000);
+
+  writeJson(FILES.discordMessages,next);
+  broadcast("discord:message",record);
+  return record;
+}
 async function removeDiscordMessage(id){const items=readJson(FILES.discordMessages,[]),next=items.filter(x=>x.id!==id);if(next.length===items.length)return;writeJson(FILES.discordMessages,next);broadcast("discord:delete",{id});}
 async function trackedGuild(){
   if(!discordClient?.isReady())return null;
@@ -966,6 +1047,40 @@ async function trackedGuild(){
 
   return null;
 }
+
+async function activityChannelsForGuild(guild){
+  const channels=await guild.channels.fetch();
+  const values=[...channels.values()].filter(Boolean);
+
+  try{
+    const activeThreads=await guild.channels.fetchActiveThreads();
+    for(const thread of activeThreads?.threads?.values?.()||[]){
+      if(!values.some(channel=>String(channel.id)===String(thread.id))){
+        values.push(thread);
+      }
+    }
+  }catch(error){
+    console.warn(`[Bay Café] Could not fetch active Discord threads: ${error.message}`);
+  }
+
+  return values.filter(channel=>
+    channel?.isTextBased?.()&&
+    !EXCLUDED_CHANNEL_IDS.has(String(channel.id))&&
+    !(
+      channel?.parentId&&
+      EXCLUDED_CHANNEL_IDS.has(String(channel.parentId))
+    )&&
+    (
+      !TRACK_CHANNEL_IDS.size||
+      TRACK_CHANNEL_IDS.has(String(channel.id))||
+      (
+        channel?.parentId&&
+        TRACK_CHANNEL_IDS.has(String(channel.parentId))
+      )
+    )
+  );
+}
+
 let activitySyncRunning=false;
 let activityLastSyncedAt=null;
 
@@ -1017,15 +1132,7 @@ async function syncDiscordCurrentWeek({reason="scheduled"}={}){
     }
 
     const weekStart=startOfCurrentWeek();
-    const channels=await guild.channels.fetch();
-
-    const eligible=[...channels.values()].filter(
-      channel=>
-        channel?.isTextBased?.()&&
-        !channel.isThread?.()&&
-        !EXCLUDED_CHANNEL_IDS.has(String(channel.id))&&
-        (!TRACK_CHANNEL_IDS.size||TRACK_CHANNEL_IDS.has(String(channel.id)))
-    );
+    const eligible=await activityChannelsForGuild(guild);
 
     const stored=readJson(FILES.discordMessages,[]);
     const merged=new Map(stored.map(item=>[String(item.id),item]));
@@ -1046,7 +1153,7 @@ async function syncDiscordCurrentWeek({reason="scheduled"}={}){
       for(const message of messages){
         if(!shouldTrackMessage(message))continue;
 
-        const record=discordRecord(message);
+        const record=await discordRecordResolved(message);
         const previous=merged.get(String(record.id));
 
         if(
@@ -1139,15 +1246,7 @@ async function rebuildDiscordHistory(){
   if(!guild)throw new Error("Discord guild is unavailable.");
 
   const weekStart=startOfCurrentWeek();
-  const channels=await guild.channels.fetch();
-
-  const eligible=[...channels.values()].filter(
-    ch=>
-      ch?.isTextBased?.()&&
-      !ch.isThread?.()&&
-      !EXCLUDED_CHANNEL_IDS.has(String(ch.id))&&
-      (!TRACK_CHANNEL_IDS.size||TRACK_CHANNEL_IDS.has(String(ch.id)))
-  );
+  const eligible=await activityChannelsForGuild(guild);
 
   const previous=readJson(FILES.discordMessages,[]);
   const beforeWeek=previous.filter(
@@ -1478,6 +1577,68 @@ function activityTeamForRole(roleName=""){
   return null;
 }
 
+
+async function enrichActivityMessagesWithMemberRoles(messages){
+  const guild=await trackedGuild().catch(()=>null);
+  if(!guild)return messages;
+
+  const authorIds=[
+    ...new Set(
+      messages
+        .map(message=>String(message.authorId||""))
+        .filter(Boolean)
+    )
+  ];
+
+  const memberMap=new Map();
+
+  for(const authorId of authorIds){
+    const member=await guild.members.fetch(authorId).catch(()=>null);
+    if(member)memberMap.set(authorId,member);
+  }
+
+  let changed=false;
+
+  const enriched=messages.map(message=>{
+    const member=memberMap.get(String(message.authorId||""));
+    if(!member)return message;
+
+    const roles=[...member.roles.cache.values()]
+      .filter(role=>role&&role.name!=="@everyone");
+
+    const roleNames=roles.map(role=>role.name);
+    const roleIds=roles.map(role=>String(role.id));
+
+    if(
+      JSON.stringify(message.authorRoleNames||[])!==JSON.stringify(roleNames)||
+      JSON.stringify(message.authorRoleIds||[])!==JSON.stringify(roleIds)||
+      message.authorName!==member.displayName
+    ){
+      changed=true;
+      return {
+        ...message,
+        authorName:member.displayName||message.authorName,
+        authorRoleNames:roleNames,
+        authorRoleIds:roleIds
+      };
+    }
+
+    return message;
+  });
+
+  if(changed){
+    const all=readJson(FILES.discordMessages,[]);
+    const replacements=new Map(enriched.map(item=>[String(item.id),item]));
+
+    writeJson(
+      FILES.discordMessages,
+      all.map(item=>replacements.get(String(item.id))||item)
+    );
+  }
+
+  return enriched;
+}
+
 app.get("/api/activity/admin",auth,async(req,res)=>{
   if(!isLeadershipOrOwnership(req.user)){
     return res.status(403).json({
@@ -1488,9 +1649,11 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
 
   const weekStart=startOfCurrentWeek();
   const all=readJson(FILES.discordMessages,[]);
-  const thisWeek=all
+  let thisWeek=all
     .filter(item=>new Date(item.createdAt)>=weekStart)
     .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+
+  thisWeek=await enrichActivityMessagesWithMemberRoles(thisWeek);
 
   const settings=getActivitySettings();
   const archive=readJson(FILES.activityArchive,[]);
@@ -1686,7 +1849,10 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
       running:activitySyncRunning,
       intervalSeconds:60,
       weekTimeZone:"America/New_York",
-      identityMode:"discord-author-id"
+      identityMode:"discord-author-id",
+      governanceRoleId:DISCORD_GOVERNANCE_ROLE_ID,
+      managementRoleId:DISCORD_MANAGEMENT_ROLE_ID,
+      trackedChannelMode:TRACK_CHANNEL_IDS.size?"configured-channels-and-threads":"all-visible-text-channels"
     },
     directory:{
       available:directory.length>0,
