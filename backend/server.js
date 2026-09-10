@@ -9,6 +9,7 @@ import { Client, GatewayIntentBits, Partials, EmbedBuilder } from "discord.js";
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
 const GROUP_ID = String(process.env.ROBLOX_GROUP_ID || "695410048").trim();
+const ROBLOX_OPEN_CLOUD_API_KEY = String(process.env.ROBLOX_OPEN_CLOUD_API_KEY || "").trim();
 const IS_RAILWAY=Boolean(process.env.RAILWAY_ENVIRONMENT||process.env.RAILWAY_PROJECT_ID||process.env.RAILWAY_SERVICE_ID);
 const DATA_DIRECTORY=path.resolve(
   process.env.DATA_DIRECTORY ||
@@ -760,86 +761,345 @@ let BAY_DIRECTORY_CACHE = {
   members: []
 };
 
+function chunksOf(items,size=100){
+  const result=[];
+  for(let i=0;i<items.length;i+=size){
+    result.push(items.slice(i,i+size));
+  }
+  return result;
+}
+
+async function robloxUsersByIds(userIds){
+  const ids=[...new Set(userIds.map(Number).filter(Boolean))];
+  const users=[];
+
+  for(const batch of chunksOf(ids,100)){
+    const response=await jsonFetch(
+      "https://users.roblox.com/v1/users",
+      {
+        method:"POST",
+        body:JSON.stringify({
+          userIds:batch,
+          excludeBannedUsers:false
+        })
+      },
+      60_000
+    );
+
+    users.push(...(Array.isArray(response?.data)?response.data:[]));
+  }
+
+  return users;
+}
+
+async function avatarHeadshotsForUsers(userIds){
+  const ids=[...new Set(userIds.map(Number).filter(Boolean))];
+  const map=new Map();
+
+  for(const batch of chunksOf(ids,100)){
+    const response=await jsonFetch(
+      `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${batch.join(",")}&size=150x150&format=Png&isCircular=true`,
+      {},
+      5*60_000
+    );
+
+    for(const item of response?.data||[]){
+      if(item?.targetId){
+        map.set(String(item.targetId),item.imageUrl||"");
+      }
+    }
+  }
+
+  return map;
+}
+
+async function bayCafeRoles(){
+  try{
+    const response=await jsonFetch(
+      `https://groups.roblox.com/v1/groups/${GROUP_ID}/roles`,
+      {},
+      5*60_000
+    );
+
+    const roles=Array.isArray(response?.roles)?response.roles:[];
+    return new Map(
+      roles.map(role=>[
+        String(role.id),
+        {
+          id:String(role.id),
+          name:role.name||"Member",
+          rank:Number(role.rank||0)
+        }
+      ])
+    );
+  }catch(error){
+    console.warn(`[Bay Café] Role list unavailable: ${error.message}`);
+    return new Map();
+  }
+}
+
+function openCloudPathId(value){
+  const match=String(value||"").match(/\/(\d+)(?:$|\/)/);
+  return match?.[1]||"";
+}
+
+async function bayCafeDirectoryOpenCloud(){
+  if(!ROBLOX_OPEN_CLOUD_API_KEY){
+    throw new Error(
+      "ROBLOX_OPEN_CLOUD_API_KEY is not configured."
+    );
+  }
+
+  const memberships=[];
+  let pageToken="";
+
+  do{
+    const params=new URLSearchParams({
+      maxPageSize:"100"
+    });
+
+    if(pageToken){
+      params.set("pageToken",pageToken);
+    }
+
+    const page=await jsonFetch(
+      `https://apis.roblox.com/cloud/v2/groups/${GROUP_ID}/memberships?${params.toString()}`,
+      {
+        headers:{
+          "x-api-key":ROBLOX_OPEN_CLOUD_API_KEY
+        }
+      },
+      0
+    );
+
+    const pageMemberships=
+      page?.groupMemberships||
+      page?.memberships||
+      page?.data||
+      [];
+
+    if(Array.isArray(pageMemberships)){
+      memberships.push(...pageMemberships);
+    }
+
+    pageToken=
+      page?.nextPageToken||
+      page?.next_page_token||
+      "";
+  }while(pageToken);
+
+  const normalized=memberships.map(item=>{
+    const userPath=
+      item?.user||
+      item?.userPath||
+      item?.user_path||
+      item?.user?.path||
+      "";
+
+    const rolePath=
+      item?.role||
+      item?.rolePath||
+      item?.role_path||
+      item?.role?.path||
+      "";
+
+    const userId=
+      item?.userId||
+      item?.user_id||
+      openCloudPathId(userPath);
+
+    const roleId=
+      item?.roleId||
+      item?.role_id||
+      openCloudPathId(rolePath);
+
+    return {
+      userId:String(userId||""),
+      roleId:String(roleId||"")
+    };
+  }).filter(item=>item.userId);
+
+  if(!normalized.length){
+    return [];
+  }
+
+  const userIds=normalized.map(item=>item.userId);
+  const [users,avatars,roles]=await Promise.all([
+    robloxUsersByIds(userIds),
+    avatarHeadshotsForUsers(userIds),
+    bayCafeRoles()
+  ]);
+
+  const userMap=new Map(
+    users.map(user=>[
+      String(user.id),
+      user
+    ])
+  );
+
+  return normalized
+    .map(member=>{
+      const user=userMap.get(member.userId);
+      if(!user)return null;
+
+      const role=roles.get(member.roleId)||{
+        name:"Member",
+        rank:0
+      };
+
+      return {
+        id:user.id,
+        username:user.name,
+        displayName:user.displayName||user.name,
+        roleName:role.name,
+        roleRank:role.rank,
+        avatar:avatars.get(String(user.id))||""
+      };
+    })
+    .filter(Boolean);
+}
+
+async function bayCafeDirectoryLegacy(){
+  const members=[];
+  let cursor="";
+
+  do{
+    const url=
+      `https://groups.roblox.com/v1/groups/${GROUP_ID}/users?sortOrder=Asc&limit=100${cursor?`&cursor=${encodeURIComponent(cursor)}`:""}`;
+
+    const page=await jsonFetch(
+      url,
+      {},
+      60_000
+    );
+
+    for(const item of page.data||[]){
+      if(!item?.user)continue;
+
+      members.push({
+        id:item.user.userId,
+        username:item.user.username,
+        displayName:item.user.displayName,
+        roleName:item.role?.name||"Member",
+        roleRank:item.role?.rank||0,
+        avatar:""
+      });
+    }
+
+    cursor=page.nextPageCursor||"";
+  }while(cursor);
+
+  if(members.length){
+    const avatars=await avatarHeadshotsForUsers(
+      members.map(item=>item.id)
+    ).catch(()=>new Map());
+
+    for(const member of members){
+      member.avatar=avatars.get(String(member.id))||"";
+    }
+  }
+
+  return members;
+}
+
 async function bayCafeDirectory({allowStale=true}={}) {
-  if (
-    BAY_DIRECTORY_CACHE.expiresAt > Date.now() &&
+  if(
+    BAY_DIRECTORY_CACHE.expiresAt>Date.now()&&
     BAY_DIRECTORY_CACHE.members.length
-  ) {
+  ){
     return BAY_DIRECTORY_CACHE.members;
   }
 
-  const persisted=readJson(FILES.staffDirectory,{members:[],savedAt:null});
-  const persistedMembers=Array.isArray(persisted?.members)?persisted.members:[];
+  const persisted=readJson(
+    FILES.staffDirectory,
+    {members:[],savedAt:null}
+  );
+  const persistedMembers=
+    Array.isArray(persisted?.members)
+      ? persisted.members
+      : [];
 
-  try{
-    const members = [];
-    let cursor = "";
+  let members=[];
+  let openCloudError=null;
+  let legacyError=null;
 
-    do {
-      const url =
-        `https://groups.roblox.com/v1/groups/${GROUP_ID}/users?sortOrder=Asc&limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
-
-      const page =
-        await jsonFetch(
-          url,
-          {},
-          60_000
-        );
-
-      for (const item of page.data || []) {
-        if (!item?.user) continue;
-
-        members.push({
-          id: item.user.userId,
-          username: item.user.username,
-          displayName: item.user.displayName,
-          roleName: item.role?.name || "Member",
-          roleRank: item.role?.rank || 0
-        });
-      }
-
-      cursor =
-        page.nextPageCursor || "";
-    } while (cursor);
-
-    if(members.length){
-      BAY_DIRECTORY_CACHE = {
-        expiresAt:
-          Date.now() + 5 * 60_000,
-        members
-      };
-
-      writeJson(FILES.staffDirectory,{
-        savedAt:new Date().toISOString(),
-        members
-      });
-
-      return members;
+  if(ROBLOX_OPEN_CLOUD_API_KEY){
+    try{
+      members=await bayCafeDirectoryOpenCloud();
+    }catch(error){
+      openCloudError=error;
+      console.warn(
+        `[Bay Café] Open Cloud member directory failed: ${error.message}`
+      );
     }
-
-    if(allowStale&&persistedMembers.length){
-      console.warn("[Bay Café] Roblox directory returned no members; using persistent staff-directory cache.");
-      BAY_DIRECTORY_CACHE={
-        expiresAt:Date.now()+60_000,
-        members:persistedMembers
-      };
-      return persistedMembers;
-    }
-
-    return [];
-  }catch(error){
-    if(allowStale&&persistedMembers.length){
-      console.warn(`[Bay Café] Roblox directory refresh failed (${error.message}); using persistent staff-directory cache.`);
-      BAY_DIRECTORY_CACHE={
-        expiresAt:Date.now()+60_000,
-        members:persistedMembers
-      };
-      return persistedMembers;
-    }
-
-    throw error;
   }
+
+  if(!members.length){
+    try{
+      members=await bayCafeDirectoryLegacy();
+    }catch(error){
+      legacyError=error;
+      console.warn(
+        `[Bay Café] Legacy Roblox member directory failed: ${error.message}`
+      );
+    }
+  }
+
+  if(members.length){
+    BAY_DIRECTORY_CACHE={
+      expiresAt:Date.now()+5*60_000,
+      members
+    };
+
+    writeJson(FILES.staffDirectory,{
+      savedAt:new Date().toISOString(),
+      source:ROBLOX_OPEN_CLOUD_API_KEY
+        ? "roblox-open-cloud"
+        : "roblox-legacy",
+      groupId:GROUP_ID,
+      members
+    });
+
+    return members;
+  }
+
+  if(allowStale&&persistedMembers.length){
+    console.warn(
+      "[Bay Café] Live member directory unavailable; using saved directory cache."
+    );
+
+    BAY_DIRECTORY_CACHE={
+      expiresAt:Date.now()+60_000,
+      members:persistedMembers
+    };
+
+    return persistedMembers;
+  }
+
+  const reason=
+    openCloudError?.message||
+    legacyError?.message||
+    (
+      ROBLOX_OPEN_CLOUD_API_KEY
+        ? "Roblox returned no group members."
+        : "Roblox now requires authenticated access to enumerate Community members. Configure ROBLOX_OPEN_CLOUD_API_KEY."
+    );
+
+  throw new Error(reason);
 }
+
+app.get("/api/profiles/status",auth,async(_req,res)=>{
+  const persisted=readJson(FILES.staffDirectory,{members:[],savedAt:null});
+
+  res.json({
+    success:true,
+    groupId:GROUP_ID,
+    openCloudConfigured:Boolean(ROBLOX_OPEN_CLOUD_API_KEY),
+    cachedMembers:Array.isArray(persisted?.members)?persisted.members.length:0,
+    cachedAt:persisted?.savedAt||null,
+    source:persisted?.source||null
+  });
+});
 
 app.get(
   "/api/profiles/search",
@@ -863,6 +1123,17 @@ app.get(
         directory=await bayCafeDirectory({allowStale:true});
       }catch(error){
         console.warn(`[Bay Café] Profile directory lookup failed: ${error.message}`);
+
+        if(
+          !ROBLOX_OPEN_CLOUD_API_KEY&&
+          String(error.message||"").includes("authenticated access")
+        ){
+          return res.status(503).json({
+            success:false,
+            message:"Profile search needs the Roblox Open Cloud key configured on the backend."
+          });
+        }
+
         directory=[];
       }
 
