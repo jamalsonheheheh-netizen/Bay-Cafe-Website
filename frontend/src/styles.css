@@ -2429,3 +2429,363 @@
     padding:4px;
   }
 }
+
+
+/* V54 — Velici-style member search */
+.velici-profile-page{
+  gap:24px;
+}
+
+.velici-profile-heading{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+}
+
+.velici-profile-heading>div>span{
+  display:block;
+  margin-bottom:7px;
+  color:#72d9d2;
+  font-size:8px;
+  font-weight:800;
+  letter-spacing:.09em;
+}
+
+.velici-profile-heading h2{
+  margin:0;
+  font-size:32px;
+  letter-spacing:-.035em;
+}
+
+.velici-profile-heading p{
+  margin:7px 0 0;
+  color:var(--muted);
+  font-size:10px;
+}
+
+.velici-profile-layout{
+  display:grid;
+  grid-template-columns:minmax(0, .95fr) minmax(360px, 1.05fr);
+  gap:16px;
+  align-items:start;
+}
+
+.velici-profile-search-panel,
+.velici-profile-detail-panel{
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:16px;
+  background:#082b38;
+}
+
+.velici-profile-search-panel{
+  padding:15px;
+}
+
+.velici-search-box{
+  min-height:48px;
+  padding:0 12px;
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:11px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  background:#061f29;
+  color:#7ba5ae;
+}
+
+.velici-search-box input{
+  min-height:46px;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  font-size:11px;
+}
+
+.velici-search-box input:focus{
+  box-shadow:none;
+}
+
+.velici-search-box button{
+  width:28px;
+  height:28px;
+  border:0;
+  border-radius:7px;
+  display:grid;
+  place-items:center;
+  background:rgba(255,255,255,.04);
+  color:#8fb4bb;
+}
+
+.velici-search-meta{
+  min-height:28px;
+  padding:9px 2px 4px;
+  color:#668e97;
+  font-size:8px;
+}
+
+.velici-profile-results{
+  display:grid;
+  gap:6px;
+}
+
+.velici-member-result{
+  width:100%;
+  min-height:66px;
+  padding:9px 10px;
+  border:1px solid transparent;
+  border-radius:10px;
+  display:grid;
+  grid-template-columns:42px 1fr auto;
+  align-items:center;
+  gap:10px;
+  background:transparent;
+  color:inherit;
+  text-align:left;
+  transition:background .15s ease,border-color .15s ease;
+}
+
+.velici-member-result:hover{
+  background:rgba(255,255,255,.035);
+  border-color:rgba(255,255,255,.055);
+}
+
+.velici-member-result>svg{
+  color:#527f89;
+}
+
+.velici-member-avatar,
+.velici-profile-large-avatar{
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  background:#0c4150;
+  color:#a7e8e3;
+  font-weight:800;
+}
+
+.velici-member-avatar{
+  width:42px;
+  height:42px;
+  border-radius:10px;
+}
+
+.velici-member-avatar img,
+.velici-profile-large-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+
+.velici-member-info{
+  min-width:0;
+}
+
+.velici-member-info strong,
+.velici-member-info span,
+.velici-member-info small{
+  display:block;
+}
+
+.velici-member-info strong{
+  overflow:hidden;
+  font-size:10px;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.velici-member-info span{
+  margin-top:2px;
+  color:#7299a2;
+  font-size:8px;
+}
+
+.velici-member-info small{
+  margin-top:5px;
+  color:#8edbd4;
+  font-size:7px;
+  font-weight:700;
+}
+
+.velici-profile-empty{
+  min-height:190px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  color:#688f98;
+  text-align:center;
+}
+
+.velici-profile-empty strong{
+  margin-top:10px;
+  color:#cfe9eb;
+  font-size:10px;
+}
+
+.velici-profile-empty span{
+  margin-top:4px;
+  font-size:8px;
+}
+
+.velici-profile-detail-panel{
+  min-height:420px;
+  padding:22px;
+}
+
+.velici-profile-detail-top{
+  display:flex;
+  align-items:center;
+  gap:16px;
+}
+
+.velici-profile-large-avatar{
+  width:86px;
+  height:86px;
+  flex:0 0 auto;
+  border-radius:17px;
+}
+
+.velici-profile-identity{
+  min-width:0;
+}
+
+.velici-profile-status{
+  display:block;
+  margin-bottom:7px;
+  color:#75dcd4;
+  font-size:7px;
+  font-weight:800;
+  letter-spacing:.07em;
+}
+
+.velici-profile-identity h2{
+  margin:0;
+  overflow:hidden;
+  font-size:27px;
+  letter-spacing:-.035em;
+  text-overflow:ellipsis;
+}
+
+.velici-profile-identity p{
+  margin:4px 0 0;
+  color:#779da5;
+  font-size:9px;
+}
+
+.velici-profile-facts{
+  margin-top:22px;
+  padding:15px 0;
+  border-top:1px solid rgba(255,255,255,.06);
+  border-bottom:1px solid rgba(255,255,255,.06);
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+}
+
+.velici-profile-facts span,
+.velici-profile-facts strong{
+  display:block;
+}
+
+.velici-profile-facts span{
+  color:#5d8790;
+  font-size:7px;
+  font-weight:800;
+  letter-spacing:.06em;
+}
+
+.velici-profile-facts strong{
+  margin-top:5px;
+  overflow:hidden;
+  font-size:9px;
+  text-overflow:ellipsis;
+}
+
+.velici-profile-about{
+  margin-top:18px;
+}
+
+.velici-profile-about>span{
+  color:#5d8790;
+  font-size:7px;
+  font-weight:800;
+  letter-spacing:.06em;
+}
+
+.velici-profile-about p{
+  margin:7px 0 0;
+  color:#a5c0c5;
+  font-size:9px;
+  line-height:1.65;
+}
+
+.velici-open-roblox{
+  width:max-content;
+  margin-top:20px;
+  padding:9px 11px;
+  border:1px solid rgba(255,255,255,.075);
+  border-radius:8px;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:#9fe4df;
+  font-size:8px;
+  font-weight:700;
+  text-decoration:none;
+}
+
+.velici-open-roblox:hover{
+  background:rgba(255,255,255,.035);
+}
+
+.velici-profile-preview-empty{
+  min-height:375px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  color:#6a929a;
+  text-align:center;
+}
+
+.velici-profile-preview-mark{
+  width:62px;
+  height:62px;
+  margin-bottom:14px;
+  border-radius:16px;
+  display:grid;
+  place-items:center;
+  background:#0a3947;
+  color:#6dcac5;
+}
+
+.velici-profile-preview-empty strong{
+  color:#d2eaec;
+  font-size:11px;
+}
+
+.velici-profile-preview-empty span{
+  margin-top:5px;
+  font-size:8px;
+}
+
+@media(max-width:900px){
+  .velici-profile-layout{
+    grid-template-columns:1fr;
+  }
+
+  .velici-profile-detail-panel{
+    min-height:0;
+  }
+}
+
+@media(max-width:560px){
+  .velici-profile-heading h2{
+    font-size:26px;
+  }
+
+  .velici-profile-facts{
+    grid-template-columns:1fr;
+  }
+}

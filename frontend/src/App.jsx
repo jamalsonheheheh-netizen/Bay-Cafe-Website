@@ -2397,13 +2397,14 @@ function Profiles({token}){
           token
         );
 
-        if(cancelled)return;
-
-        setSuggestions(result.results||[]);
+        if(!cancelled){
+          setSuggestions(result.results||[]);
+        }
       }catch(error){
-        if(cancelled)return;
-        setSuggestions([]);
-        setMessage(error.message);
+        if(!cancelled){
+          setSuggestions([]);
+          setMessage(error.message);
+        }
       }finally{
         if(!cancelled){
           setSuggesting(false);
@@ -2420,7 +2421,7 @@ function Profiles({token}){
   const openProfile=async username=>{
     setQuery(username);
     setSuggestions([]);
-    setMessage("Loading profile...");
+    setMessage("");
     setProfile(null);
 
     try{
@@ -2431,101 +2432,170 @@ function Profiles({token}){
       );
 
       setProfile(result.profile);
-      setMessage("");
     }catch(error){
       setMessage(error.message);
     }
   };
 
-  return <div className="page-stack">
-    <SectionHead
-      kicker="ROBLOX DIRECTORY"
-      title="Profile lookup."
-      text="Start typing any letter. Matching Bay Café members update live as you continue typing."
-    />
+  const clearSearch=()=>{
+    setQuery("");
+    setSuggestions([]);
+    setProfile(null);
+    setMessage("");
+  };
 
-    <div className="profile-search-wrap live-profile-search">
-      <div className="profile-search">
-        <Search size={17}/>
-        <input
-          value={query}
-          onChange={event=>{
-            setQuery(event.target.value);
-            setProfile(null);
-          }}
-          placeholder="Start typing a Roblox name..."
-          autoComplete="off"
-          autoFocus
-        />
-        {query&&
-          <button
-            type="button"
-            className="profile-clear"
-            onClick={()=>{
-              setQuery("");
-              setSuggestions([]);
-              setProfile(null);
-              setMessage("");
-            }}
-            aria-label="Clear profile search"
-          >
-            <X size={14}/>
-          </button>
-        }
+  return <div className="page-stack velici-profile-page">
+    <header className="velici-profile-heading">
+      <div>
+        <span>PROFILES</span>
+        <h2>Find a Bay Café member.</h2>
+        <p>Search by Roblox username or display name.</p>
       </div>
+    </header>
 
-      {query.trim()&&
-        <div className="profile-suggestions live">
-          {suggesting
-            ? <div className="suggestion-loading">Searching Bay Café...</div>
-            : suggestions.length
-              ? suggestions.map(item=>
-                <button
-                  type="button"
-                  key={item.id}
-                  onClick={()=>openProfile(item.username)}
-                >
-                  <img src={item.avatar} alt=""/>
-                  <div>
-                    <strong>{item.displayName}</strong>
-                    <span>@{item.username} • {item.roleName}</span>
-                  </div>
-                  <ChevronRight size={14}/>
-                </button>
-              )
-              : <div className="suggestion-empty">No Bay Café member found with that name.</div>
+    <div className={`velici-profile-layout ${profile?"has-profile":""}`}>
+      <section className="velici-profile-search-panel">
+        <div className="velici-search-box">
+          <Search size={18}/>
+          <input
+            value={query}
+            onChange={event=>{
+              setQuery(event.target.value);
+              setProfile(null);
+            }}
+            placeholder="Search members..."
+            autoComplete="off"
+            autoFocus
+          />
+          {query&&
+            <button
+              type="button"
+              onClick={clearSearch}
+              aria-label="Clear profile search"
+            >
+              <X size={14}/>
+            </button>
           }
         </div>
-      }
-    </div>
 
-    {profile&&
-      <article className="profile-card">
-        <img src={profile.avatar} alt=""/>
-        <div className="profile-main">
-          <Badge tone={profile.inGroup?"green":"sand"}>
-            {profile.inGroup?"BAY CAFÉ MEMBER":"NOT IN GROUP"}
-          </Badge>
-          <h2>{profile.displayName}</h2>
-          <span>@{profile.username}</span>
-          <div className="profile-rank">
-            <strong>{profile.roleName}</strong>
-            <span>Rank {profile.roleRank}</span>
-          </div>
-          <p>{profile.description||"No Roblox About description."}</p>
-          <a
-            href={profile.profileUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="secondary-btn inline"
-          >
-            Open Roblox Profile<ExternalLink size={14}/>
-          </a>
+        <div className="velici-search-meta">
+          <span>
+            {suggesting
+              ? "Searching..."
+              : query.trim()
+                ? `${suggestions.length} match${suggestions.length===1?"":"es"}`
+                : "Start typing to search"
+            }
+          </span>
         </div>
-      </article>
-    }
 
-    {message&&<div className="notice">{message}</div>}
+        <div className="velici-profile-results">
+          {!query.trim()&&
+            <div className="velici-profile-empty">
+              <UserRoundSearch size={22}/>
+              <strong>Search the staff directory</strong>
+              <span>Results appear as you type.</span>
+            </div>
+          }
+
+          {query.trim()&&!suggesting&&suggestions.length===0&&!message&&
+            <div className="velici-profile-empty">
+              <UserRoundSearch size={22}/>
+              <strong>No member found</strong>
+              <span>Try another Roblox username or display name.</span>
+            </div>
+          }
+
+          {suggestions.map(member=>
+            <button
+              type="button"
+              key={member.id}
+              className="velici-member-result"
+              onClick={()=>openProfile(member.username)}
+            >
+              <div className="velici-member-avatar">
+                {member.avatar
+                  ? <img src={member.avatar} alt=""/>
+                  : <span>{String(member.displayName||member.username||"?").charAt(0).toUpperCase()}</span>
+                }
+              </div>
+
+              <div className="velici-member-info">
+                <strong>{member.displayName}</strong>
+                <span>@{member.username}</span>
+                <small>{member.roleName}</small>
+              </div>
+
+              <ArrowUpRight size={16}/>
+            </button>
+          )}
+        </div>
+
+        {message&&<div className="notice">{message}</div>}
+      </section>
+
+      <section className="velici-profile-detail-panel">
+        {profile
+          ? <>
+              <div className="velici-profile-detail-top">
+                <div className="velici-profile-large-avatar">
+                  {profile.avatar
+                    ? <img src={profile.avatar} alt=""/>
+                    : <span>{String(profile.displayName||profile.username||"?").charAt(0).toUpperCase()}</span>
+                  }
+                </div>
+
+                <div className="velici-profile-identity">
+                  <span className="velici-profile-status">
+                    {profile.inGroup?"BAY CAFÉ MEMBER":"NOT IN GROUP"}
+                  </span>
+                  <h2>{profile.displayName}</h2>
+                  <p>@{profile.username}</p>
+                </div>
+              </div>
+
+              <div className="velici-profile-facts">
+                <div>
+                  <span>RANK</span>
+                  <strong>{profile.roleName}</strong>
+                </div>
+
+                <div>
+                  <span>RANK NUMBER</span>
+                  <strong>{profile.roleRank}</strong>
+                </div>
+
+                <div>
+                  <span>ROBLOX ID</span>
+                  <strong>{profile.id}</strong>
+                </div>
+              </div>
+
+              <div className="velici-profile-about">
+                <span>ABOUT</span>
+                <p>{profile.description||"No Roblox About description."}</p>
+              </div>
+
+              <a
+                href={profile.profileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="velici-open-roblox"
+              >
+                View Roblox profile
+                <ArrowUpRight size={15}/>
+              </a>
+            </>
+          : <div className="velici-profile-preview-empty">
+              <div className="velici-profile-preview-mark">
+                <UserRoundSearch size={28}/>
+              </div>
+              <strong>Select a member</strong>
+              <span>Their profile will open here.</span>
+            </div>
+        }
+      </section>
+    </div>
   </div>;
 }
 function TicketsPage({token,user,items,reload,setToast}){const[form,setForm]=useState({type:"General Support",subject:"",details:""}),[selectedId,setSelectedId]=useState(""),[reply,setReply]=useState(""),[loading,setLoading]=useState(false);const selected=items.find(x=>x.id===selectedId)||items[0]||null;useEffect(()=>{if(!selectedId&&items[0])setSelectedId(items[0].id)},[items,selectedId]);const submit=async e=>{e.preventDefault();setLoading(true);try{const r=await api("/api/tickets",{method:"POST",body:JSON.stringify(form)},token);setForm({type:"General Support",subject:"",details:""});await reload();setSelectedId(r.ticket.id);setToast("Support ticket opened")}catch(err){setToast(err.message)}finally{setLoading(false)}};const sendReply=async e=>{e.preventDefault();if(!selected||!reply.trim())return;try{const r=await api(`/api/tickets/${selected.id}/messages`,{method:"POST",body:JSON.stringify({content:reply})},token);setReply("");await reload();setSelectedId(r.ticket.id)}catch(err){setToast(err.message)}};const closeTicket=async()=>{if(!selected)return;try{await api(`/api/tickets/${selected.id}/close`,{method:"POST"},token);await reload();setToast("Ticket closed")}catch(err){setToast(err.message)}};return <div className="page-stack"><SectionHead kicker="SUPPORT CENTER" title="Website support." text="Create a ticket here and continue the conversation from the website. Discord staff can reply through the linked thread when configured."/><div className="ticket-layout"><aside className="ticket-side"><form className="ticket-form" onSubmit={submit}><h3>New Ticket</h3><label><span>TYPE</span><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option>General Support</option><option>Management Question</option><option>Exploiter Report</option><option>Resignation</option><option>Other</option></select></label><label><span>SUBJECT</span><input value={form.subject} onChange={e=>setForm({...form,subject:e.target.value})} placeholder="Short summary"/></label><label><span>MESSAGE</span><textarea rows="5" value={form.details} onChange={e=>setForm({...form,details:e.target.value})} placeholder="Explain what you need help with..."/></label><button className="primary-btn" disabled={loading}>{loading?"Opening...":"Open Ticket"}<Ticket size={14}/></button></form><div className="ticket-list"><div className="ticket-list-head"><strong>{user.capabilities?.ticketAdmin?"All Tickets":"Your Tickets"}</strong><span>{items.length}</span></div>{items.map(item=><button key={item.id} className={selected?.id===item.id?"active":""} onClick={()=>setSelectedId(item.id)}><div><strong>{item.subject}</strong><span>{item.type}</span></div><Badge tone={item.status==="open"?"green":"sand"}>{item.status}</Badge></button>)}</div></aside><section className="ticket-thread">{selected?<><div className="ticket-thread-head"><div><span className="eyebrow">{selected.type}</span><h3>{selected.subject}</h3><small>{selected.id}</small></div><div className="thread-actions"><Badge tone={selected.status==="open"?"green":"sand"}>{selected.status}</Badge>{selected.status==="open"&&<button className="secondary-btn compact" onClick={closeTicket}>Close</button>}</div></div><div className="ticket-messages">{(selected.messages||[]).map(m=><article key={m.id} className={String(m.authorId)===String(user.id)?"mine":"staff"}><div><strong>{m.authorDisplayName||m.authorUsername}</strong><span>{m.authorType==="staff"?"STAFF":"USER"}</span><small>{formatDate(m.createdAt)}</small></div><p>{m.content}</p></article>)}</div>{selected.status==="open"?<form className="ticket-reply" onSubmit={sendReply}><textarea rows="3" value={reply} onChange={e=>setReply(e.target.value)} placeholder="Write a reply..."/><button className="primary-btn">Send Reply<MessageCircleMore size={14}/></button></form>:<div className="closed-note">This ticket is closed.</div>}</>:<Empty icon={LifeBuoy} title="Select a ticket" text="Your support conversation will appear here."/>}</section></div></div>;}
