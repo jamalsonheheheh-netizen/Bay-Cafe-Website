@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {Activity,Archive,ArrowRight,Bell,BookOpen,BriefcaseBusiness,Cake,CheckCircle2,ChevronRight,Coffee,ExternalLink,FilePenLine,Gauge,Gift,LifeBuoy,Link2,LogOut,Megaphone,Menu,MessageCircleMore,Plus,Search,ShieldCheck,Sparkles,Ticket,Trash2,UserRoundSearch,Users,Waves,X} from "lucide-react";
+import {Activity,Archive,ArrowRight,ArrowUpRight,Bell,BookOpen,BriefcaseBusiness,Cake,CheckCircle2,ChevronRight,Coffee,ExternalLink,FilePenLine,Gauge,Gift,LifeBuoy,Link2,LogOut,Megaphone,Menu,MessageCircleMore,Plus,Search,ShieldCheck,Sparkles,Ticket,Trash2,UserRoundSearch,Users,Waves,X} from "lucide-react";
 import bayHeroArt from "./assets/bay-hero-art.svg";
 import careersArt from "./assets/careers-art.svg";
 import communityArt from "./assets/community-art.svg";
