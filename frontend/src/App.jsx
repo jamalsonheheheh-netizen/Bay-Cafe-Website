@@ -2079,7 +2079,7 @@ function ActivityAdminPage({token,setToast}){
 
     const interval=setInterval(()=>{
       load().catch(()=>{});
-    },10_000);
+    },30_000);
 
     return()=>clearInterval(interval);
   },[token]);
@@ -2181,7 +2181,7 @@ function ActivityAdminPage({token,setToast}){
     <SectionHead
       kicker="LEADERSHIP / OWNERSHIP"
       title="Activity Management."
-      text="See every tracked member in Corporate, Management, and Directing. New Discord messages are captured live, the current week is reconciled every 60 seconds, and this page refreshes every 10 seconds."
+      text="See every current Corporate, Management, and Directing Team member, including members with zero messages. New Discord messages are captured live, background sync is incremental, and this page refreshes every 30 seconds."
       right={<Badge tone="green">LIVE TRACKING</Badge>}
     />
 
@@ -2663,11 +2663,156 @@ function ConnectionsPage({token,user,setToast}){
 }
 
 function DisciplinePage({token,user,setToast}){
-  const[staff,setStaff]=useState([]),[records,setRecords]=useState([]),[selected,setSelected]=useState(null),[form,setForm]=useState({type:"verbal",reason:"",evidence:""});const leadership=Number(user.level||0)>=4;
-  const load=async()=>{const[s,r]=await Promise.all([api("/api/staff-directory",{},token),api("/api/discipline",{},token)]);setStaff(s.staff||[]);setRecords(r.items||[])};useEffect(()=>{load().catch(()=>{})},[token]);
-  const issue=async e=>{e.preventDefault();if(!selected)return setToast("Select a staff member");try{const r=await api("/api/discipline",{method:"POST",body:JSON.stringify({...form,robloxId:selected.id,username:selected.username,displayName:selected.displayName})},token);setForm({type:"verbal",reason:"",evidence:""});await load();setToast(`${form.type==="strike"?"Strike":"Warning"} recorded${r.dm?.sent?" • DM sent":` • ${r.dm?.reason||"DM not sent"}`}`)}catch(err){setToast(err.message)}};
-  const demote=async member=>{try{const r=await api("/api/discipline/demote",{method:"POST",body:JSON.stringify({robloxId:member.id,username:member.username,displayName:member.displayName,reason:"Three active strikes"})},token);await load();setToast(`Demotion recorded${r.dm?.sent?" • DM sent":""}`)}catch(err){setToast(err.message)}};
-  return <div className="page-stack"><SectionHead kicker="STAFF RECORDS" title="Warnings, strikes, and demotions" text="Disciplinary actions are recorded here. The Discord bot DMs linked staff automatically."/><div className="ops-two-col"><form className="ops-card discipline-form" onSubmit={issue}><label><span>STAFF MEMBER</span><select value={selected?.id||""} onChange={e=>setSelected(staff.find(x=>String(x.id)===e.target.value)||null)}><option value="">Select staff...</option>{staff.map(m=><option value={m.id} key={m.id}>{m.displayName} (@{m.username}) • {m.roleName}</option>)}</select></label>{selected&&<PanelNote>{selected.activeStrikes||0}/3 active strikes {selected.linked?"• Discord linked":"• Discord not linked"}</PanelNote>}<label><span>ACTION</span><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option value="verbal">Verbal Warning</option><option value="warning">Warning</option><option value="strike">Strike</option></select></label><label><span>REASON</span><textarea rows="4" value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})}/></label><label><span>EVIDENCE / NOTES</span><textarea rows="3" value={form.evidence} onChange={e=>setForm({...form,evidence:e.target.value})}/></label><button className="primary-btn">Issue & DM</button>{leadership&&selected&&(selected.activeStrikes||0)>=3&&<button type="button" className="danger-btn" onClick={()=>demote(selected)}>Record demotion (3 strikes)</button>}<small className="muted-note">Demotion records the action and DMs the member. Roblox rank changes remain manual until group-write automation is enabled.</small></form><div className="ops-list">{records.slice(0,100).map(r=><article className="ops-row" key={r.id}><div><div className="ops-row-head"><strong>{r.displayName||r.username}</strong><Badge tone={r.type==="strike"||r.type==="demotion"?"sand":"aqua"}>{r.type}</Badge></div><span>@{r.username} • {formatDate(r.createdAt)} • by {r.issuedBy?.displayName||r.issuedBy?.username}</span><p>{r.reason}</p>{r.active===false&&<small>VOIDED</small>}</div></article>)}</div></div></div>;
+  const[records,setRecords]=useState([]);
+  const[staff,setStaff]=useState([]);
+  const[selected,setSelected]=useState(null);
+  const[form,setForm]=useState({type:"verbal",reason:"",evidence:""});
+  const leadership=Number(user.level||0)>=4;
+
+  const load=async()=>{
+    const result=await api("/api/discipline",{},token);
+    setRecords(result.items||[]);
+    setStaff(result.targets||[]);
+    setSelected(current=>{
+      if(!current)return null;
+      return (result.targets||[]).find(x=>String(x.id)===String(current.id))||null;
+    });
+  };
+
+  useEffect(()=>{load().catch(e=>setToast(e.message))},[token]);
+
+  const issue=async e=>{
+    e.preventDefault();
+    if(!selected){
+      setToast("Select a Directing, Management, or Corporate Team member.");
+      return;
+    }
+
+    try{
+      const result=await api(
+        "/api/discipline",
+        {
+          method:"POST",
+          body:JSON.stringify({
+            ...form,
+            robloxId:selected.id,
+            username:selected.username,
+            displayName:selected.displayName
+          })
+        },
+        token
+      );
+
+      setForm({type:"verbal",reason:"",evidence:""});
+      await load();
+      setToast(result.dm?.sent?"Record issued and DM sent.":"Record issued. Discord DM could not be sent.");
+    }catch(error){
+      setToast(error.message);
+    }
+  };
+
+  const demote=async member=>{
+    try{
+      const result=await api(
+        "/api/discipline/demote",
+        {
+          method:"POST",
+          body:JSON.stringify({
+            robloxId:member.id,
+            username:member.username,
+            displayName:member.displayName,
+            reason:"Three active strikes"
+          })
+        },
+        token
+      );
+
+      await load();
+      setToast(result.dm?.sent?"Demotion recorded and DM sent.":"Demotion recorded.");
+    }catch(error){
+      setToast(error.message);
+    }
+  };
+
+  return <div className="page-stack">
+    <SectionHead
+      kicker="STAFF RECORDS"
+      title="Warnings, strikes, and demotions"
+      text="Only Directing Team, Management Team, and Corporate Team members appear here. Disciplinary actions are recorded and linked Discord users are DMed automatically."
+    />
+
+    <div className="ops-two-col">
+      <form className="ops-card discipline-form" onSubmit={issue}>
+        <label>
+          <span>STAFF MEMBER</span>
+          <select
+            value={selected?.id||""}
+            onChange={e=>setSelected(staff.find(x=>String(x.id)===e.target.value)||null)}
+          >
+            <option value="">Select staff...</option>
+            {staff.map(member=>
+              <option value={member.id} key={member.id}>
+                {member.displayName} (@{member.username}) • {member.roleName}
+              </option>
+            )}
+          </select>
+        </label>
+
+        {selected&&
+          <PanelNote>
+            {selected.activeStrikes||0}/3 active strikes • {selected.roleName}
+          </PanelNote>
+        }
+
+        <label>
+          <span>ACTION</span>
+          <select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>
+            <option value="verbal">Verbal Warning</option>
+            <option value="warning">Warning</option>
+            <option value="strike">Strike</option>
+          </select>
+        </label>
+
+        <label>
+          <span>REASON</span>
+          <textarea rows="4" value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})}/>
+        </label>
+
+        <label>
+          <span>EVIDENCE / NOTES</span>
+          <textarea rows="3" value={form.evidence} onChange={e=>setForm({...form,evidence:e.target.value})}/>
+        </label>
+
+        <button className="primary-btn">Issue & DM</button>
+
+        {leadership&&selected&&(selected.activeStrikes||0)>=3&&
+          <button type="button" className="danger-btn" onClick={()=>demote(selected)}>
+            Record demotion (3 strikes)
+          </button>
+        }
+
+        <small className="muted-note">
+          Demotion records the action and DMs the member. Roblox rank changes remain manual until group-write automation is enabled.
+        </small>
+      </form>
+
+      <div className="ops-list">
+        {records.slice(0,100).map(record=>
+          <article className="ops-row" key={record.id}>
+            <div>
+              <div className="ops-row-head">
+                <strong>{record.displayName||record.username}</strong>
+                <Badge tone={record.type==="strike"||record.type==="demotion"?"sand":"aqua"}>{record.type}</Badge>
+              </div>
+              <span>@{record.username} • {formatDate(record.createdAt)} • by {record.issuedBy?.displayName||record.issuedBy?.username}</span>
+              <p>{record.reason}</p>
+              {record.active===false&&<small>VOIDED</small>}
+            </div>
+          </article>
+        )}
+      </div>
+    </div>
+  </div>;
 }
 
 function SchedulePage({token,user,setToast}){
@@ -2686,8 +2831,159 @@ function StaffDirectoryPage({token,user}){
 }
 
 function DepartmentsPage({token,user,setToast}){
- const[items,setItems]=useState([]);const admin=Number(user.level||0)>=4;const load=()=>api("/api/departments",{},token).then(r=>setItems(r.departments||[]));useEffect(()=>{load().catch(()=>{})},[token]);const update=(i,field,value)=>setItems(items.map((x,index)=>index===i?{...x,[field]:value}:x));const save=async()=>{try{await api("/api/departments",{method:"PUT",body:JSON.stringify({departments:items})},token);setToast("Departments saved")}catch(e){setToast(e.message)}};
- return <div className="page-stack"><SectionHead kicker="DEPARTMENTS" title="How Bay Café is organized" text="Human Resources, Public Relations, and Operations." right={admin?<button className="primary-btn" onClick={save}>Save changes</button>:null}/><div className="ops-grid-3">{items.map((d,i)=><article className="ops-card department-card" key={d.id}><Building2 size={20}/>{admin?<input value={d.name} onChange={e=>update(i,"name",e.target.value)}/>:<h3>{d.name}</h3>}{admin?<textarea rows="5" value={d.description} onChange={e=>update(i,"description",e.target.value)}/>:<p>{d.description}</p>}<label><span>LEAD</span>{admin?<input value={d.lead||""} onChange={e=>update(i,"lead",e.target.value)} placeholder="Department lead"/>:<strong>{d.lead||"Not assigned"}</strong>}</label></article>)}</div></div>;
+  const DRAFT_KEY="bay.cafe.department-draft.v61";
+  const[items,setItems]=useState([]);
+  const[loaded,setLoaded]=useState(false);
+  const admin=Number(user.level||0)>=4;
+
+  useEffect(()=>{
+    let cancelled=false;
+
+    const restore=()=>{
+      try{
+        const saved=sessionStorage.getItem(DRAFT_KEY);
+        if(saved){
+          const parsed=JSON.parse(saved);
+          if(Array.isArray(parsed)&&parsed.length)return parsed;
+        }
+      }catch{}
+      return null;
+    };
+
+    const draft=restore();
+    if(draft){
+      setItems(draft);
+      setLoaded(true);
+      return()=>{cancelled=true};
+    }
+
+    api("/api/departments",{},token)
+      .then(result=>{
+        if(cancelled)return;
+        setItems(
+          (result.departments||[]).map(department=>({
+            ...department,
+            heads:Array.isArray(department.heads)
+              ? [...department.heads.slice(0,2),...Array(2).fill("")].slice(0,2)
+              : [department.lead||"",""]
+          }))
+        );
+        setLoaded(true);
+      })
+      .catch(error=>{
+        if(!cancelled)setToast(error.message);
+      });
+
+    return()=>{cancelled=true};
+  },[token]);
+
+  const commit=next=>{
+    setItems(next);
+    try{
+      sessionStorage.setItem(DRAFT_KEY,JSON.stringify(next));
+    }catch{}
+  };
+
+  const update=(index,field,value)=>{
+    commit(items.map((item,itemIndex)=>
+      itemIndex===index?{...item,[field]:value}:item
+    ));
+  };
+
+  const updateHead=(index,headIndex,value)=>{
+    commit(items.map((item,itemIndex)=>{
+      if(itemIndex!==index)return item;
+      const heads=Array.isArray(item.heads)?[...item.heads]:["",""];
+      heads[headIndex]=value;
+      return {...item,heads};
+    }));
+  };
+
+  const save=async()=>{
+    try{
+      const result=await api(
+        "/api/departments",
+        {
+          method:"PUT",
+          body:JSON.stringify({departments:items})
+        },
+        token
+      );
+
+      const normalized=(result.departments||[]).map(department=>({
+        ...department,
+        heads:Array.isArray(department.heads)?department.heads:["",""]
+      }));
+
+      setItems(normalized);
+      try{sessionStorage.removeItem(DRAFT_KEY)}catch{}
+      setToast("Departments saved.");
+    }catch(error){
+      setToast(error.message);
+    }
+  };
+
+  if(!loaded){
+    return <div className="notice">Loading departments...</div>;
+  }
+
+  return <div className="page-stack">
+    <SectionHead
+      kicker="DEPARTMENTS"
+      title="How Bay Café is organized"
+      text="Human Resources, Public Relations, and Operations. Each department can have up to two heads."
+      right={admin?<button className="primary-btn" onClick={save}>Save changes</button>:null}
+    />
+
+    <div className="ops-grid-3">
+      {items.map((department,index)=>
+        <article className="ops-card department-card" key={department.id}>
+          <Building2 size={20}/>
+
+          {admin
+            ? <input value={department.name} onChange={e=>update(index,"name",e.target.value)}/>
+            : <h3>{department.name}</h3>
+          }
+
+          {admin
+            ? <textarea rows="5" value={department.description} onChange={e=>update(index,"description",e.target.value)}/>
+            : <p>{department.description}</p>
+          }
+
+          <div className="department-heads">
+            <span>DEPARTMENT HEADS</span>
+
+            {admin
+              ? <>
+                  <input
+                    value={department.heads?.[0]||""}
+                    onChange={e=>updateHead(index,0,e.target.value)}
+                    placeholder="First department head"
+                  />
+                  <input
+                    value={department.heads?.[1]||""}
+                    onChange={e=>updateHead(index,1,e.target.value)}
+                    placeholder="Second department head"
+                  />
+                </>
+              : <div className="department-head-list">
+                  {(department.heads||[]).filter(Boolean).length
+                    ? (department.heads||[]).filter(Boolean).map((head,i)=><strong key={i}>{head}</strong>)
+                    : <strong>Not assigned</strong>
+                  }
+                </div>
+            }
+          </div>
+        </article>
+      )}
+    </div>
+
+    {admin&&
+      <small className="muted-note department-draft-note">
+        Changes stay on this device while you type. Press Save changes when you're finished.
+      </small>
+    }
+  </div>;
 }
 
 function NotificationsPage({token}){

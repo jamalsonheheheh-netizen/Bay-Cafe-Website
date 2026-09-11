@@ -1635,9 +1635,9 @@ function activeLoaFor(robloxId,at=new Date()){
   )||null;
 }
 function defaultDepartments(){return [
-  {id:"hr",name:"Human Resources",description:"Applications, staff conduct, activity, strikes, demotions, and staff support.",lead:"",members:[],links:[]},
-  {id:"pr",name:"Public Relations",description:"Alliances, announcements, events, representatives, and community relations.",lead:"",members:[],links:[]},
-  {id:"operations",name:"Operations",description:"Tickets, moderation, shifts, trainings, and day-to-day operations.",lead:"",members:[],links:[]}
+  {id:"hr",name:"Human Resources",description:"Applications, staff conduct, activity, strikes, demotions, and staff support.",lead:"",heads:["",""],members:[],links:[]},
+  {id:"pr",name:"Public Relations",description:"Alliances, announcements, events, representatives, and community relations.",lead:"",heads:["",""],members:[],links:[]},
+  {id:"operations",name:"Operations",description:"Tickets, moderation, shifts, trainings, and day-to-day operations.",lead:"",heads:["",""],members:[],links:[]}
 ];}
 function getDepartments(){const items=readJson(FILES.departments,null);return Array.isArray(items)&&items.length?items:defaultDepartments();}
 function readGameActivity(){const state=readJson(FILES.gameActivity,{sessions:[],totals:{}});return {sessions:Array.isArray(state?.sessions)?state.sessions:[],totals:state?.totals&&typeof state.totals==="object"?state.totals:{}};}
@@ -1700,10 +1700,11 @@ app.post("/api/link/unlink",auth,(req,res)=>{
   saveLinkState(state);auditEvent("discord.unlinked",req.user,{robloxId:req.user.id,username:req.user.username});res.json({success:true});
 });
 
-app.get("/api/discipline",auth,(req,res)=>{
+app.get("/api/discipline",auth,async(req,res)=>{
   const all=readJson(FILES.discipline,[]);
   const items=canModerateStaff(req.user)?all:all.filter(x=>String(x.robloxId)===String(req.user.id));
-  res.json({success:true,items});
+  const targets=canModerateStaff(req.user)?await disciplinaryEligibleDirectory():[];
+  res.json({success:true,items,targets});
 });
 app.post("/api/discipline",auth,async(req,res)=>{
   if(!canModerateStaff(req.user))return res.status(403).json({success:false,message:"Management access required."});
@@ -1711,6 +1712,9 @@ app.post("/api/discipline",auth,async(req,res)=>{
   if(!["verbal","warning","strike"].includes(type))return res.status(400).json({success:false,message:"Choose verbal warning, warning, or strike."});
   const robloxId=cleanText(req.body.robloxId,40),username=cleanText(req.body.username,60),displayName=cleanText(req.body.displayName,80),reason=cleanText(req.body.reason,1200),evidence=cleanText(req.body.evidence,1200);
   if(!robloxId||reason.length<3)return res.status(400).json({success:false,message:"Choose a staff member and enter a reason."});
+  const eligible=await disciplinaryEligibleDirectory();
+  const target=eligible.find(member=>String(member.id)===String(robloxId));
+  if(!target)return res.status(400).json({success:false,message:"Warnings and strikes can only be issued to Directing, Management, or Corporate Team members."});
   const all=readJson(FILES.discipline,[]);
   const item={id:crypto.randomUUID(),type,robloxId,username,displayName,reason,evidence,active:true,createdAt:nowIso(),issuedBy:{id:req.user.id,username:req.user.username,displayName:req.user.displayName,roleName:req.user.roleName}};
   all.unshift(item);writeJson(FILES.discipline,all);
@@ -1726,6 +1730,9 @@ app.post("/api/discipline",auth,async(req,res)=>{
 app.post("/api/discipline/demote",auth,async(req,res)=>{
   if(!canManageStaff(req.user))return res.status(403).json({success:false,message:"Leadership access required to record a demotion."});
   const robloxId=cleanText(req.body.robloxId,40),username=cleanText(req.body.username,60),displayName=cleanText(req.body.displayName,80),reason=cleanText(req.body.reason,1200);
+  const eligible=await disciplinaryEligibleDirectory();
+  const target=eligible.find(member=>String(member.id)===String(robloxId));
+  if(!target)return res.status(400).json({success:false,message:"Demotions from the strike system only apply to Directing, Management, or Corporate Team members."});
   const strikes=activeStrikesFor(robloxId);
   if(strikes<3)return res.status(400).json({success:false,message:`This member has ${strikes}/3 active strikes.`});
   const all=readJson(FILES.discipline,[]);
@@ -1756,10 +1763,30 @@ app.delete("/api/schedules/:id",auth,(req,res)=>{
   const all=readJson(FILES.schedules,[]),item=all.find(x=>x.id===req.params.id);writeJson(FILES.schedules,all.filter(x=>x.id!==req.params.id));if(item)auditEvent("schedule.deleted",req.user,{scheduleId:item.id,title:item.title});res.json({success:true});
 });
 
-app.get("/api/departments",auth,(_req,res)=>res.json({success:true,departments:getDepartments()}));
+app.get("/api/departments",auth,(_req,res)=>{
+  const departments=getDepartments().map(item=>{
+    const heads=Array.isArray(item.heads)?item.heads.slice(0,2):[item.lead||"",""];
+    while(heads.length<2)heads.push("");
+    return {...item,heads};
+  });
+  res.json({success:true,departments});
+});
 app.put("/api/departments",auth,(req,res)=>{
   if(!canManageStaff(req.user))return res.status(403).json({success:false,message:"Leadership access required."});
-  const departments=Array.isArray(req.body.departments)?req.body.departments.slice(0,10).map(item=>({id:cleanText(item.id,30)||crypto.randomUUID(),name:cleanText(item.name,80),description:cleanText(item.description,800),lead:cleanText(item.lead,100),members:Array.isArray(item.members)?item.members.slice(0,100):[],links:Array.isArray(item.links)?item.links.slice(0,20):[]})):[];
+  const departments=Array.isArray(req.body.departments)?req.body.departments.slice(0,10).map(item=>{
+    const incomingHeads=Array.isArray(item.heads)?item.heads:[item.lead||"",""];
+    const heads=incomingHeads.slice(0,2).map(value=>cleanText(value,100));
+    while(heads.length<2)heads.push("");
+    return {
+      id:cleanText(item.id,30)||crypto.randomUUID(),
+      name:cleanText(item.name,80),
+      description:cleanText(item.description,800),
+      lead:heads.filter(Boolean).join(" & "),
+      heads,
+      members:Array.isArray(item.members)?item.members.slice(0,100):[],
+      links:Array.isArray(item.links)?item.links.slice(0,20):[]
+    };
+  }):[];
   writeJson(FILES.departments,departments);auditEvent("departments.updated",req.user,{count:departments.length});res.json({success:true,departments});
 });
 
@@ -1888,11 +1915,30 @@ async function syncDiscordCurrentWeek({reason="scheduled"}={}){
     let scanned=0;
     let addedOrUpdated=0;
 
+    const latestByChannel=new Map();
+    for(const item of stored){
+      if(!item?.channelId||!item?.createdAt)continue;
+      const stamp=new Date(item.createdAt);
+      if(stamp<weekStart)continue;
+      const previous=latestByChannel.get(String(item.channelId));
+      if(!previous||stamp>previous)latestByChannel.set(String(item.channelId),stamp);
+    }
+
     for(const channel of eligible){
       if(!channel?.messages?.fetch)continue;
 
-      const messages=await fetchMessagesSince(channel,weekStart,5000).catch(error=>{
-        console.warn(`[Bay Café] Weekly activity sync skipped #${channel.name||channel.id}: ${error.message}`);
+      const latest=latestByChannel.get(String(channel.id));
+      // Normal sync only looks slightly behind the newest stored message.
+      // If this channel has no stored activity yet, bootstrap from the last
+      // 6 hours instead of rescanning the entire week. "Rebuild" remains the
+      // explicit full-week scan.
+      const bootstrap=new Date(Date.now()-6*60*60*1000);
+      const since=latest
+        ? new Date(Math.max(weekStart.getTime(),latest.getTime()-10*60*1000))
+        : new Date(Math.max(weekStart.getTime(),bootstrap.getTime()));
+
+      const messages=await fetchMessagesSince(channel,since,750).catch(error=>{
+        console.warn(`[Bay Café] Incremental activity sync skipped #${channel.name||channel.id}: ${error.message}`);
         return [];
       });
 
@@ -2328,6 +2374,71 @@ function activityTeamForRole(roleName=""){
   return null;
 }
 
+function disciplinaryTeamForRole(roleName=""){
+  const team=activityTeamForRole(roleName);
+  return ["Corporate","Management","Directing"].includes(team)?team:null;
+}
+
+async function disciplinaryEligibleDirectory(){
+  let directory=[];
+  try{
+    directory=await bayCafeDirectory({allowStale:true});
+  }catch{}
+  const links=readLinkState().links||[];
+  return directory
+    .filter(member=>Boolean(disciplinaryTeamForRole(member.roleName)))
+    .map(member=>({
+      ...member,
+      team:disciplinaryTeamForRole(member.roleName),
+      activeStrikes:activeStrikesFor(member.id),
+      linked:links.some(link=>String(link.robloxId)===String(member.id))
+    }));
+}
+
+
+
+
+let activityRosterCache={at:0,members:[]};
+
+async function currentTrackedDiscordRoster(){
+  const now=Date.now();
+  if(now-activityRosterCache.at<60_000&&activityRosterCache.members.length){
+    return activityRosterCache.members;
+  }
+
+  const guild=await trackedGuild().catch(()=>null);
+  if(!guild)return activityRosterCache.members||[];
+
+  // Fetch the guild member roster once, then filter to the three teams.
+  // This is what keeps zero-message team members visible in Activity Management.
+  const fetched=await guild.members.fetch().catch(()=>null);
+  const source=fetched?[...fetched.values()]:[...guild.members.cache.values()];
+
+  const members=source
+    .filter(member=>member&&!member.user?.bot)
+    .map(member=>{
+      const roles=[...member.roles.cache.values()]
+        .filter(role=>role&&role.name!=="@everyone");
+      const roleNames=roles.map(role=>role.name);
+      const roleIds=roles.map(role=>String(role.id));
+      const team=activityTeamFromDiscordRoles(roleNames,roleIds);
+      if(!team)return null;
+
+      return {
+        discordId:String(member.id),
+        username:member.user?.username||"",
+        displayName:member.displayName||member.user?.globalName||member.user?.username||"",
+        avatar:member.displayAvatarURL?.({size:128})||member.user?.displayAvatarURL?.({size:128})||"",
+        roleNames,
+        roleIds,
+        team
+      };
+    })
+    .filter(Boolean);
+
+  activityRosterCache={at:now,members};
+  return members;
+}
 
 async function enrichActivityMessagesWithMemberRoles(messages){
   const guild=await trackedGuild().catch(()=>null);
@@ -2432,6 +2543,15 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
    * Discord username exactly matches a Roblox username.
    */
   const directoryByUsername=new Map();
+  const linkState=readLinkState();
+  const directoryByRobloxId=new Map(
+    directory.map(member=>[String(member.id),member])
+  );
+  const robloxByDiscordId=new Map(
+    (linkState.links||[])
+      .filter(link=>link?.discordId&&link?.robloxId)
+      .map(link=>[String(link.discordId),directoryByRobloxId.get(String(link.robloxId))||null])
+  );
 
   for(const member of directory){
     const username=String(member.username||"").trim().toLowerCase();
@@ -2472,13 +2592,41 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
     discordAuthors.set(authorId,current);
   }
 
+  // Add the complete live Discord roster for Corporate, Management, and
+  // Directing before building the response. This ensures members with ZERO
+  // messages still appear and avoids relying only on Roblox-name matching.
+  const liveRoster=await currentTrackedDiscordRoster();
+
+  for(const rosterMember of liveRoster){
+    const authorId=String(rosterMember.discordId);
+    const current=discordAuthors.get(authorId)||{
+      authorId,
+      authorUsername:rosterMember.username,
+      authorName:rosterMember.displayName,
+      authorAvatar:rosterMember.avatar,
+      roleNames:rosterMember.roleNames,
+      roleIds:rosterMember.roleIds,
+      messages:[]
+    };
+
+    current.authorUsername=rosterMember.username||current.authorUsername;
+    current.authorName=rosterMember.displayName||current.authorName;
+    current.authorAvatar=rosterMember.avatar||current.authorAvatar;
+    current.roleNames=rosterMember.roleNames;
+    current.roleIds=rosterMember.roleIds;
+    discordAuthors.set(authorId,current);
+  }
+
   const members=[];
   const matchedRobloxIds=new Set();
 
   for(const author of discordAuthors.values()){
-    const exactRobloxMatch=directoryByUsername.get(
-      String(author.authorUsername||"").trim().toLowerCase()
-    )||null;
+    const exactRobloxMatch=
+      robloxByDiscordId.get(String(author.authorId))||
+      directoryByUsername.get(
+        String(author.authorUsername||"").trim().toLowerCase()
+      )||
+      null;
 
     const teamFromDiscord=activityTeamFromDiscordRoles(author.roleNames,author.roleIds);
     const teamFromRoblox=exactRobloxMatch

@@ -2848,3 +2848,39 @@
   text-align:center;
   line-height:1.5;
 }
+
+
+/* V61 — stable department editor */
+.department-heads{
+  display:grid;
+  gap:7px;
+  margin-top:12px;
+}
+
+.department-heads>span{
+  color:#9dc5cf;
+  font-size:8px;
+  font-weight:800;
+  letter-spacing:.11em;
+}
+
+.department-heads input{
+  min-height:40px;
+}
+
+.department-head-list{
+  display:grid;
+  gap:5px;
+}
+
+.department-head-list strong{
+  display:block;
+  font-size:10px;
+  color:#dff9fb;
+}
+
+.department-draft-note{
+  display:block;
+  text-align:center;
+  margin-top:4px;
+}
