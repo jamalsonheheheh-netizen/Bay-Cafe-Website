@@ -10,6 +10,7 @@ const app = express();
 const PORT = Number(process.env.PORT || 3001);
 const GROUP_ID = String(process.env.ROBLOX_GROUP_ID || "695410048").trim();
 const ROBLOX_OPEN_CLOUD_API_KEY = String(process.env.ROBLOX_OPEN_CLOUD_API_KEY || "").trim();
+const GAME_ACTIVITY_SECRET = String(process.env.GAME_ACTIVITY_SECRET || "").trim();
 const IS_RAILWAY=Boolean(process.env.RAILWAY_ENVIRONMENT||process.env.RAILWAY_PROJECT_ID||process.env.RAILWAY_SERVICE_ID);
 const DATA_DIRECTORY=path.resolve(
   process.env.DATA_DIRECTORY ||
@@ -30,7 +31,7 @@ app.use(cors({origin(origin,cb){if(!origin)return cb(null,true);const clean=orig
 app.use(express.json({limit:"1mb"}));
 fs.mkdirSync(DATA_DIRECTORY,{recursive:true});
 
-const FILES={discordMessages:path.join(DATA_DIRECTORY,"discord-messages.json"),tickets:path.join(DATA_DIRECTORY,"tickets.json"),applications:path.join(DATA_DIRECTORY,"applications.json"),applicationSubmissions:path.join(DATA_DIRECTORY,"application-submissions.json"),activitySettings:path.join(DATA_DIRECTORY,"activity-settings.json"),activityArchive:path.join(DATA_DIRECTORY,"activity-archive.json"),birthdays:path.join(DATA_DIRECTORY,"birthdays.json"),staffDirectory:path.join(DATA_DIRECTORY,"staff-directory.json"),sessions:path.join(DATA_DIRECTORY,"sessions.json")};
+const FILES={discordMessages:path.join(DATA_DIRECTORY,"discord-messages.json"),tickets:path.join(DATA_DIRECTORY,"tickets.json"),applications:path.join(DATA_DIRECTORY,"applications.json"),applicationSubmissions:path.join(DATA_DIRECTORY,"application-submissions.json"),activitySettings:path.join(DATA_DIRECTORY,"activity-settings.json"),activityArchive:path.join(DATA_DIRECTORY,"activity-archive.json"),birthdays:path.join(DATA_DIRECTORY,"birthdays.json"),staffDirectory:path.join(DATA_DIRECTORY,"staff-directory.json"),sessions:path.join(DATA_DIRECTORY,"sessions.json"),loas:path.join(DATA_DIRECTORY,"loas.json"),discordLinks:path.join(DATA_DIRECTORY,"discord-links.json"),discipline:path.join(DATA_DIRECTORY,"discipline.json"),audit:path.join(DATA_DIRECTORY,"audit-log.json"),schedules:path.join(DATA_DIRECTORY,"schedules.json"),notifications:path.join(DATA_DIRECTORY,"notifications.json"),departments:path.join(DATA_DIRECTORY,"departments.json"),gameActivity:path.join(DATA_DIRECTORY,"game-activity.json")};
 function readJson(file,fallback){try{if(!fs.existsSync(file))return fallback;const raw=fs.readFileSync(file,"utf8");return raw?JSON.parse(raw):fallback;}catch{return fallback;}}
 function writeJson(file,value){const temp=`${file}.tmp`;fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(temp,JSON.stringify(value,null,2));fs.renameSync(temp,file);}
 
@@ -1557,6 +1558,277 @@ async function activityChannelsForGuild(guild){
   );
 }
 
+
+/* =========================================================
+   STAFF OPERATIONS — LOA, LINKING, DISCIPLINE, SCHEDULES,
+   NOTIFICATIONS, AUDIT, DEPARTMENTS, AND GAME ACTIVITY
+========================================================= */
+function canModerateStaff(user){return Number(user?.level||0)>=2;}
+function canManageStaff(user){return Number(user?.level||0)>=4;}
+function nowIso(){return new Date().toISOString();}
+function cleanText(value,max=1000){return String(value||"").trim().slice(0,max);}
+function userKey(value){return String(value||"").trim();}
+
+function readLinkState(){
+  const state=readJson(FILES.discordLinks,{links:[],pending:[]});
+  return {
+    links:Array.isArray(state?.links)?state.links:[],
+    pending:Array.isArray(state?.pending)?state.pending:[]
+  };
+}
+function saveLinkState(state){writeJson(FILES.discordLinks,state);}
+function discordLinkForRobloxId(robloxId){
+  return readLinkState().links.find(item=>String(item.robloxId)===String(robloxId))||null;
+}
+function discordLinkForDiscordId(discordId){
+  return readLinkState().links.find(item=>String(item.discordId)===String(discordId))||null;
+}
+function auditEvent(action,actor,target={},meta={}){
+  const items=readJson(FILES.audit,[]);
+  const record={
+    id:crypto.randomUUID(),action,
+    actor:{id:actor?.id||null,username:actor?.username||"System",displayName:actor?.displayName||actor?.username||"System",roleName:actor?.roleName||""},
+    target,meta,createdAt:nowIso()
+  };
+  items.unshift(record);
+  writeJson(FILES.audit,items.slice(0,5000));
+  broadcast("audit:new",record);
+  return record;
+}
+function pushNotification(robloxId,type,title,message,meta={}){
+  if(!robloxId)return null;
+  const items=readJson(FILES.notifications,[]);
+  const item={id:crypto.randomUUID(),robloxId:String(robloxId),type,title,message,meta,read:false,createdAt:nowIso()};
+  items.unshift(item);
+  writeJson(FILES.notifications,items.slice(0,10000));
+  broadcast("notification:new",item);
+  return item;
+}
+async function dmLinkedRobloxUser(robloxId,{title,message,color=0x38bdf8,fields=[]}={}){
+  const link=discordLinkForRobloxId(robloxId);
+  if(!link)return {sent:false,reason:"Discord account is not linked."};
+  if(!discordClient?.isReady())return {sent:false,reason:"Discord bot is offline."};
+  try{
+    const user=await discordClient.users.fetch(String(link.discordId));
+    await user.send({
+      embeds:[new EmbedBuilder().setColor(color).setTitle(title||"Bay Café").setDescription(message||"").addFields(fields).setFooter({text:"Bay Café Staff Management"}).setTimestamp()]
+    });
+    return {sent:true,discordId:link.discordId};
+  }catch(error){
+    return {sent:false,reason:error.message||"Unable to DM this user."};
+  }
+}
+function activeStrikesFor(robloxId){
+  return readJson(FILES.discipline,[]).filter(item=>
+    String(item.robloxId)===String(robloxId)&&
+    item.type==="strike"&&
+    item.active!==false
+  ).length;
+}
+function activeLoaFor(robloxId,at=new Date()){
+  const today=at.toISOString().slice(0,10);
+  return readJson(FILES.loas,[]).find(item=>
+    String(item.robloxId)===String(robloxId)&&
+    item.status==="approved"&&
+    String(item.startDate)<=today&&
+    String(item.endDate)>=today
+  )||null;
+}
+function defaultDepartments(){return [
+  {id:"hr",name:"Human Resources",description:"Applications, staff conduct, activity, strikes, demotions, and staff support.",lead:"",members:[],links:[]},
+  {id:"pr",name:"Public Relations",description:"Alliances, announcements, events, representatives, and community relations.",lead:"",members:[],links:[]},
+  {id:"operations",name:"Operations",description:"Tickets, moderation, shifts, trainings, and day-to-day operations.",lead:"",members:[],links:[]}
+];}
+function getDepartments(){const items=readJson(FILES.departments,null);return Array.isArray(items)&&items.length?items:defaultDepartments();}
+function readGameActivity(){const state=readJson(FILES.gameActivity,{sessions:[],totals:{}});return {sessions:Array.isArray(state?.sessions)?state.sessions:[],totals:state?.totals&&typeof state.totals==="object"?state.totals:{}};}
+function saveGameActivity(state){writeJson(FILES.gameActivity,state);}
+
+app.get("/api/notifications",auth,(req,res)=>{
+  const items=readJson(FILES.notifications,[]).filter(x=>String(x.robloxId)===String(req.user.id));
+  res.json({success:true,notifications:items,unread:items.filter(x=>!x.read).length});
+});
+app.post("/api/notifications/read",auth,(req,res)=>{
+  const ids=new Set((Array.isArray(req.body.ids)?req.body.ids:[]).map(String));
+  const all=readJson(FILES.notifications,[]);
+  for(const item of all){if(String(item.robloxId)===String(req.user.id)&&(ids.size===0||ids.has(String(item.id))))item.read=true;}
+  writeJson(FILES.notifications,all);
+  res.json({success:true});
+});
+
+app.get("/api/loa",auth,(req,res)=>{
+  const all=readJson(FILES.loas,[]);
+  const loas=canManageStaff(req.user)?all:all.filter(x=>String(x.robloxId)===String(req.user.id));
+  res.json({success:true,loas});
+});
+app.post("/api/loa",auth,(req,res)=>{
+  const startDate=cleanText(req.body.startDate,10),endDate=cleanText(req.body.endDate,10),reason=cleanText(req.body.reason,1000);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(startDate)||!/^\d{4}-\d{2}-\d{2}$/.test(endDate)||endDate<startDate||reason.length<5)return res.status(400).json({success:false,message:"Enter valid LOA dates and a reason."});
+  const all=readJson(FILES.loas,[]);
+  const item={id:crypto.randomUUID(),robloxId:req.user.id,username:req.user.username,displayName:req.user.displayName,roleName:req.user.roleName,startDate,endDate,reason,status:"pending",createdAt:nowIso(),reviewedAt:null,reviewedBy:null,reviewNote:""};
+  all.unshift(item);writeJson(FILES.loas,all);auditEvent("loa.submitted",req.user,{robloxId:req.user.id,username:req.user.username},{loaId:item.id,startDate,endDate});
+  res.json({success:true,loa:item});
+});
+app.put("/api/loa/:id",auth,async(req,res)=>{
+  if(!canManageStaff(req.user))return res.status(403).json({success:false,message:"Leadership access required."});
+  const status=["approved","denied"].includes(String(req.body.status))?String(req.body.status):"";
+  if(!status)return res.status(400).json({success:false,message:"Choose approved or denied."});
+  const all=readJson(FILES.loas,[]),item=all.find(x=>x.id===req.params.id);if(!item)return res.status(404).json({success:false,message:"LOA not found."});
+  item.status=status;item.reviewedAt=nowIso();item.reviewedBy=req.user.username;item.reviewNote=cleanText(req.body.reviewNote,500);writeJson(FILES.loas,all);
+  const title=status==="approved"?"LOA Approved":"LOA Denied";
+  const message=`Your Bay Café LOA for ${item.startDate} through ${item.endDate} was ${status}.${item.reviewNote?`\n\nNote: ${item.reviewNote}`:""}`;
+  pushNotification(item.robloxId,"loa",title,message,{loaId:item.id});
+  const dm=await dmLinkedRobloxUser(item.robloxId,{title,message,color:status==="approved"?0x22c55e:0xef4444});
+  auditEvent(`loa.${status}`,req.user,{robloxId:item.robloxId,username:item.username},{loaId:item.id,dmSent:dm.sent});
+  res.json({success:true,loa:item,dm});
+});
+
+app.get("/api/link",auth,(req,res)=>{
+  const link=discordLinkForRobloxId(req.user.id);
+  res.json({success:true,link:link?{discordId:link.discordId,discordUsername:link.discordUsername,linkedAt:link.linkedAt}:null});
+});
+app.post("/api/link/start",auth,(req,res)=>{
+  const state=readLinkState();
+  state.pending=state.pending.filter(x=>Date.now()<Number(x.expiresAt||0)&&String(x.robloxId)!==String(req.user.id));
+  let code="";do{code=crypto.randomBytes(3).toString("hex").toUpperCase();}while(state.pending.some(x=>x.code===code));
+  state.pending.push({code,robloxId:req.user.id,username:req.user.username,displayName:req.user.displayName,expiresAt:Date.now()+10*60*1000});
+  saveLinkState(state);res.json({success:true,code,command:`,link ${code}`,expiresInMinutes:10});
+});
+app.post("/api/link/unlink",auth,(req,res)=>{
+  const state=readLinkState();
+  state.links=state.links.filter(x=>String(x.robloxId)!==String(req.user.id));
+  state.pending=state.pending.filter(x=>String(x.robloxId)!==String(req.user.id));
+  saveLinkState(state);auditEvent("discord.unlinked",req.user,{robloxId:req.user.id,username:req.user.username});res.json({success:true});
+});
+
+app.get("/api/discipline",auth,(req,res)=>{
+  const all=readJson(FILES.discipline,[]);
+  const items=canModerateStaff(req.user)?all:all.filter(x=>String(x.robloxId)===String(req.user.id));
+  res.json({success:true,items});
+});
+app.post("/api/discipline",auth,async(req,res)=>{
+  if(!canModerateStaff(req.user))return res.status(403).json({success:false,message:"Management access required."});
+  const type=String(req.body.type||"");
+  if(!["verbal","warning","strike"].includes(type))return res.status(400).json({success:false,message:"Choose verbal warning, warning, or strike."});
+  const robloxId=cleanText(req.body.robloxId,40),username=cleanText(req.body.username,60),displayName=cleanText(req.body.displayName,80),reason=cleanText(req.body.reason,1200),evidence=cleanText(req.body.evidence,1200);
+  if(!robloxId||reason.length<3)return res.status(400).json({success:false,message:"Choose a staff member and enter a reason."});
+  const all=readJson(FILES.discipline,[]);
+  const item={id:crypto.randomUUID(),type,robloxId,username,displayName,reason,evidence,active:true,createdAt:nowIso(),issuedBy:{id:req.user.id,username:req.user.username,displayName:req.user.displayName,roleName:req.user.roleName}};
+  all.unshift(item);writeJson(FILES.discipline,all);
+  const strikes=activeStrikesFor(robloxId),demotionEligible=strikes>=3;
+  const labels={verbal:"Verbal Warning",warning:"Warning",strike:"Strike"};
+  const title=`Bay Café ${labels[type]}`;
+  const message=`You received a ${labels[type].toLowerCase()} from Bay Café.\n\nReason: ${reason}${evidence?`\n\nEvidence/notes: ${evidence}`:""}${type==="strike"?`\n\nActive strikes: ${strikes}/3`:""}${demotionEligible?"\n\nYou are now eligible for demotion under the 3-strike policy.":""}`;
+  pushNotification(robloxId,"discipline",title,message,{recordId:item.id,type,strikes,demotionEligible});
+  const dm=await dmLinkedRobloxUser(robloxId,{title,message,color:type==="strike"?0xef4444:type==="warning"?0xf59e0b:0x38bdf8});
+  auditEvent(`discipline.${type}`,req.user,{robloxId,username},{recordId:item.id,reason,strikes,demotionEligible,dmSent:dm.sent});
+  res.json({success:true,item,strikes,demotionEligible,dm});
+});
+app.post("/api/discipline/demote",auth,async(req,res)=>{
+  if(!canManageStaff(req.user))return res.status(403).json({success:false,message:"Leadership access required to record a demotion."});
+  const robloxId=cleanText(req.body.robloxId,40),username=cleanText(req.body.username,60),displayName=cleanText(req.body.displayName,80),reason=cleanText(req.body.reason,1200);
+  const strikes=activeStrikesFor(robloxId);
+  if(strikes<3)return res.status(400).json({success:false,message:`This member has ${strikes}/3 active strikes.`});
+  const all=readJson(FILES.discipline,[]);
+  const item={id:crypto.randomUUID(),type:"demotion",robloxId,username,displayName,reason:reason||"Three active strikes",evidence:"",active:true,createdAt:nowIso(),issuedBy:{id:req.user.id,username:req.user.username,displayName:req.user.displayName,roleName:req.user.roleName},strikeCountAtDemotion:strikes,robloxRankChanged:false};
+  all.unshift(item);writeJson(FILES.discipline,all);
+  const title="Bay Café Demotion";
+  const message=`A demotion has been recorded after reaching ${strikes} active strikes.\n\nReason: ${item.reason}\n\nYour Roblox rank must be updated by authorized leadership.`;
+  pushNotification(robloxId,"discipline",title,message,{recordId:item.id,type:"demotion"});
+  const dm=await dmLinkedRobloxUser(robloxId,{title,message,color:0xdc2626});
+  auditEvent("discipline.demotion",req.user,{robloxId,username},{recordId:item.id,strikes,dmSent:dm.sent});
+  res.json({success:true,item,dm,robloxRankChanged:false});
+});
+app.post("/api/discipline/:id/void",auth,(req,res)=>{
+  if(!canManageStaff(req.user))return res.status(403).json({success:false,message:"Leadership access required."});
+  const all=readJson(FILES.discipline,[]),item=all.find(x=>x.id===req.params.id);if(!item)return res.status(404).json({success:false,message:"Record not found."});
+  item.active=false;item.voidedAt=nowIso();item.voidedBy=req.user.username;item.voidReason=cleanText(req.body.reason,500);writeJson(FILES.discipline,all);auditEvent("discipline.voided",req.user,{robloxId:item.robloxId,username:item.username},{recordId:item.id});res.json({success:true,item});
+});
+
+app.get("/api/schedules",auth,(_req,res)=>res.json({success:true,items:readJson(FILES.schedules,[])}));
+app.post("/api/schedules",auth,(req,res)=>{
+  if(!canManageStaff(req.user))return res.status(403).json({success:false,message:"Leadership access required."});
+  const title=cleanText(req.body.title,120),type=["Training","Shift","Meeting","Event"].includes(String(req.body.type))?String(req.body.type):"Training",startsAt=cleanText(req.body.startsAt,40),host=cleanText(req.body.host,100),notes=cleanText(req.body.notes,800);
+  if(title.length<2||!startsAt)return res.status(400).json({success:false,message:"Add a title and start time."});
+  const all=readJson(FILES.schedules,[]),item={id:crypto.randomUUID(),title,type,startsAt,host:host||req.user.displayName,notes,status:"scheduled",createdAt:nowIso(),createdBy:req.user.username};all.unshift(item);writeJson(FILES.schedules,all);auditEvent("schedule.created",req.user,{scheduleId:item.id,title:item.title},{type,startsAt});res.json({success:true,item});
+});
+app.delete("/api/schedules/:id",auth,(req,res)=>{
+  if(!canManageStaff(req.user))return res.status(403).json({success:false,message:"Leadership access required."});
+  const all=readJson(FILES.schedules,[]),item=all.find(x=>x.id===req.params.id);writeJson(FILES.schedules,all.filter(x=>x.id!==req.params.id));if(item)auditEvent("schedule.deleted",req.user,{scheduleId:item.id,title:item.title});res.json({success:true});
+});
+
+app.get("/api/departments",auth,(_req,res)=>res.json({success:true,departments:getDepartments()}));
+app.put("/api/departments",auth,(req,res)=>{
+  if(!canManageStaff(req.user))return res.status(403).json({success:false,message:"Leadership access required."});
+  const departments=Array.isArray(req.body.departments)?req.body.departments.slice(0,10).map(item=>({id:cleanText(item.id,30)||crypto.randomUUID(),name:cleanText(item.name,80),description:cleanText(item.description,800),lead:cleanText(item.lead,100),members:Array.isArray(item.members)?item.members.slice(0,100):[],links:Array.isArray(item.links)?item.links.slice(0,20):[]})):[];
+  writeJson(FILES.departments,departments);auditEvent("departments.updated",req.user,{count:departments.length});res.json({success:true,departments});
+});
+
+app.get("/api/audit",auth,(req,res)=>{
+  if(!canManageStaff(req.user))return res.status(403).json({success:false,message:"Leadership access required."});
+  res.json({success:true,items:readJson(FILES.audit,[]).slice(0,500)});
+});
+
+app.patch("/api/application-submissions/:id/review",auth,async(req,res)=>{
+  if(!canManageStaff(req.user))return res.status(403).json({success:false,message:"Leadership access required."});
+  const status=["accepted","denied","hold","pending"].includes(String(req.body.status))?String(req.body.status):"";
+  if(!status)return res.status(400).json({success:false,message:"Choose accepted, denied, hold, or pending."});
+  const all=readJson(FILES.applicationSubmissions,[]),item=all.find(x=>x.id===req.params.id);if(!item)return res.status(404).json({success:false,message:"Submission not found."});
+  item.status=status;item.reviewNote=cleanText(req.body.reviewNote,1000);item.reviewedAt=nowIso();item.reviewedBy=req.user.username;writeJson(FILES.applicationSubmissions,all);
+  const robloxId=item.userId||item.robloxId;
+  const title=`Application ${status==="hold"?"On Hold":status.charAt(0).toUpperCase()+status.slice(1)}`;
+  const message=`Your ${item.applicationTitle||item.title||"Bay Café"} application is now ${status}.${item.reviewNote?`\n\nReviewer note: ${item.reviewNote}`:""}`;
+  if(robloxId){pushNotification(robloxId,"application",title,message,{submissionId:item.id,status});await dmLinkedRobloxUser(robloxId,{title,message,color:status==="accepted"?0x22c55e:status==="denied"?0xef4444:0xf59e0b});}
+  auditEvent("application.reviewed",req.user,{submissionId:item.id,robloxId:robloxId||null,username:item.username||item.userUsername||""},{status});broadcast("application:submission",item);res.json({success:true,submission:item});
+});
+
+app.get("/api/staff-directory",auth,async(req,res)=>{
+  let directory=[];try{directory=await bayCafeDirectory({allowStale:true});}catch{}
+  const links=readLinkState().links,loas=readJson(FILES.loas,[]),discipline=readJson(FILES.discipline,[]),game=readGameActivity();
+  const weekStart=startOfCurrentWeek();const messages=readJson(FILES.discordMessages,[]).filter(x=>new Date(x.createdAt)>=weekStart);
+  const staff=directory.map(member=>{
+    const link=links.find(x=>String(x.robloxId)===String(member.id));
+    const messageCount=link?messages.filter(x=>String(x.authorId)===String(link.discordId)).length:messages.filter(x=>normalizeIdentity(x.authorUsername)===normalizeIdentity(member.username)).length;
+    const strikes=discipline.filter(x=>String(x.robloxId)===String(member.id)&&x.type==="strike"&&x.active!==false).length;
+    return {...member,linked:Boolean(link),discordUsername:link?.discordUsername||"",messageCount,loa:activeLoaFor(member.id),activeStrikes:strikes,gameMinutes:Number(game.totals?.[String(member.id)]?.minutes||0)};
+  });
+  res.json({success:true,staff});
+});
+app.get("/api/staff/:id/summary",auth,async(req,res)=>{
+  const robloxId=String(req.params.id);let directory=[];try{directory=await bayCafeDirectory({allowStale:true});}catch{}
+  const member=directory.find(x=>String(x.id)===robloxId);if(!member)return res.status(404).json({success:false,message:"Staff member not found."});
+  const link=discordLinkForRobloxId(robloxId),weekStart=startOfCurrentWeek(),messages=readJson(FILES.discordMessages,[]).filter(x=>new Date(x.createdAt)>=weekStart&&(link?String(x.authorId)===String(link.discordId):normalizeIdentity(x.authorUsername)===normalizeIdentity(member.username)));
+  const discipline=readJson(FILES.discipline,[]).filter(x=>String(x.robloxId)===robloxId);const loas=readJson(FILES.loas,[]).filter(x=>String(x.robloxId)===robloxId);const game=readGameActivity();
+  res.json({success:true,member:{...member,link:link?{discordId:link.discordId,discordUsername:link.discordUsername,linkedAt:link.linkedAt}:null,messageCount:messages.length,discipline:canModerateStaff(req.user)?discipline:[],loas:canManageStaff(req.user)||String(req.user.id)===robloxId?loas:[],game:game.totals?.[robloxId]||{minutes:0,lastSeenAt:null}}});
+});
+
+app.get("/api/search",auth,async(req,res)=>{
+  const q=cleanText(req.query.q,80).toLowerCase();if(q.length<2)return res.json({success:true,results:[]});
+  const results=[];let directory=[];try{directory=await bayCafeDirectory({allowStale:true});}catch{}
+  for(const m of directory){if(`${m.username} ${m.displayName} ${m.roleName}`.toLowerCase().includes(q))results.push({type:"staff",id:String(m.id),title:m.displayName,subtitle:`@${m.username} • ${m.roleName}`});}
+  for(const a of readApplications()){if(`${a.title} ${a.description}`.toLowerCase().includes(q))results.push({type:"application",id:a.id,title:a.title,subtitle:a.status||"application"});}
+  if(req.user.capabilities?.ticketAdmin){for(const t of readJson(FILES.tickets,[])){if(`${t.subject} ${t.username} ${t.type}`.toLowerCase().includes(q))results.push({type:"ticket",id:t.id,title:t.subject,subtitle:`${t.username} • ${t.status}`});}}
+  for(const s of readJson(FILES.schedules,[])){if(`${s.title} ${s.type} ${s.host}`.toLowerCase().includes(q))results.push({type:"schedule",id:s.id,title:s.title,subtitle:`${s.type} • ${s.startsAt}`});}
+  res.json({success:true,results:results.slice(0,40)});
+});
+
+app.get("/api/game/activity/me",auth,(req,res)=>{
+  const state=readGameActivity();res.json({success:true,enabled:Boolean(GAME_ACTIVITY_SECRET),activity:state.totals?.[String(req.user.id)]||{minutes:0,lastSeenAt:null,sessions:0}});
+});
+app.get("/api/game/activity/admin",auth,(req,res)=>{
+  if(!canManageStaff(req.user))return res.status(403).json({success:false,message:"Leadership access required."});
+  const state=readGameActivity();res.json({success:true,enabled:Boolean(GAME_ACTIVITY_SECRET),totals:state.totals,recentSessions:state.sessions.slice(0,200)});
+});
+app.post("/api/game/activity",(req,res)=>{
+  if(!GAME_ACTIVITY_SECRET)return res.status(503).json({success:false,message:"Game activity integration is not enabled yet."});
+  if(String(req.headers["x-bay-game-secret"]||"")!==GAME_ACTIVITY_SECRET)return res.status(401).json({success:false,message:"Invalid game activity secret."});
+  const robloxId=cleanText(req.body.robloxId,40),username=cleanText(req.body.username,60),event=["join","heartbeat","leave"].includes(String(req.body.event))?String(req.body.event):"heartbeat";
+  if(!robloxId)return res.status(400).json({success:false,message:"robloxId is required."});
+  const state=readGameActivity(),key=String(robloxId),now=Date.now();let open=state.sessions.find(x=>String(x.robloxId)===key&&!x.leftAt);
+  if(event==="join"||!open){open={id:crypto.randomUUID(),robloxId:key,username,joinedAt:new Date(now).toISOString(),lastHeartbeatAt:new Date(now).toISOString(),leftAt:null,minutes:0};state.sessions.unshift(open);}
+  const previous=Date.parse(open.lastHeartbeatAt||open.joinedAt)||now;const added=Math.max(0,Math.min(5,(now-previous)/60000));open.minutes=Number(open.minutes||0)+added;open.lastHeartbeatAt=new Date(now).toISOString();if(event==="leave")open.leftAt=new Date(now).toISOString();
+  const total=state.totals[key]||{robloxId:key,username,minutes:0,sessions:0,lastSeenAt:null};total.username=username||total.username;total.minutes=Number(total.minutes||0)+added;if(event==="join"&&added===0)total.sessions=Number(total.sessions||0)+1;total.lastSeenAt=new Date(now).toISOString();state.totals[key]=total;state.sessions=state.sessions.slice(0,10000);saveGameActivity(state);res.json({success:true,activity:total});
+});
+
 let activitySyncRunning=false;
 let activityLastSyncedAt=null;
 
@@ -1857,6 +2129,11 @@ function normalizeIdentity(value){
 }
 
 function messageBelongsToUser(message,user){
+  const link=discordLinkForRobloxId(user?.id);
+  if(link?.discordId){
+    return String(message?.authorId||"")===String(link.discordId);
+  }
+
   const userNames=new Set([
     normalizeIdentity(user?.username),
     normalizeIdentity(user?.displayName)
@@ -1865,9 +2142,7 @@ function messageBelongsToUser(message,user){
   return [
     normalizeIdentity(message?.authorUsername),
     normalizeIdentity(message?.authorName)
-  ].some(
-    value=>value&&userNames.has(value)
-  );
+  ].some(value=>value&&userNames.has(value));
 }
 
 app.get("/api/activity/me",auth,(req,res)=>{
@@ -2293,6 +2568,11 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
       matchedBy:"roblox-directory",
       messages:[]
     });
+  }
+
+  for(const member of members){
+    const robloxId=member.robloxId||null;
+    member.loa=robloxId?activeLoaFor(robloxId):null;
   }
 
   members.sort((a,b)=>{
@@ -2942,7 +3222,22 @@ async function startDiscord(){if(!DISCORD_BOT_TOKEN){console.warn("[Bay Café] D
       syncDiscordCurrentWeek({reason:"scheduled"})
         .catch(e=>console.error(`[Bay Café] Scheduled activity sync failed: ${e.message}`));
     },60_000);
-  });discordClient.on("messageCreate",async message=>{if(!message.guildId)return;const guild=await trackedGuild();if(guild&&message.guildId!==guild.id)return;const tickets=readJson(FILES.tickets,[]),ticket=tickets.find(x=>x.status==="open"&&String(x.discordThreadId||"")===String(message.channelId));if(ticket&&message.channel?.isThread?.()&&!message.author?.bot){const content=String(message.content||"").trim(),attachmentText=message.attachments?.size?[...message.attachments.values()].map(x=>x.url).join("\n"):"",merged=[content,attachmentText].filter(Boolean).join("\n").slice(0,1800);if(merged){ticket.messages??=[];ticket.messages.push({id:`discord-${message.id}`,authorType:"staff",authorId:message.author.id,authorDisplayName:message.member?.displayName||message.author.globalName||message.author.username,authorUsername:message.author.username,content:merged,createdAt:message.createdAt.toISOString(),source:"discord"});ticket.updatedAt=new Date().toISOString();writeJson(FILES.tickets,tickets);broadcast("ticket:update",publicTicket(ticket));}return;}await persistDiscordMessage(message).catch(e=>console.error(`[Bay Café] Discord message tracking failed: ${e.message}`));});discordClient.on("messageUpdate",async(_old,newMessage)=>{const full=newMessage.partial?await newMessage.fetch().catch(()=>null):newMessage;if(full)await persistDiscordMessage(full).catch(()=>null);});discordClient.on("messageDelete",async message=>removeDiscordMessage(message.id));await discordClient.login(DISCORD_BOT_TOKEN);}
+  });discordClient.on("messageCreate",async message=>{if(!message.guildId)return;const guild=await trackedGuild();if(guild&&message.guildId!==guild.id)return;
+    if(!message.author?.bot&&String(message.content||"").trim().toLowerCase().startsWith(",link ")){
+      const code=String(message.content||"").trim().split(/\s+/)[1]?.toUpperCase()||"";
+      const state=readLinkState();
+      state.pending=state.pending.filter(x=>Date.now()<Number(x.expiresAt||0));
+      const pending=state.pending.find(x=>x.code===code);
+      if(!pending){await message.reply({content:"That Bay Café link code is invalid or expired.",allowedMentions:{repliedUser:false}}).catch(()=>{});saveLinkState(state);return;}
+      state.links=state.links.filter(x=>String(x.robloxId)!==String(pending.robloxId)&&String(x.discordId)!==String(message.author.id));
+      state.links.push({robloxId:pending.robloxId,robloxUsername:pending.username,robloxDisplayName:pending.displayName,discordId:message.author.id,discordUsername:message.author.username,discordDisplayName:message.member?.displayName||message.author.globalName||message.author.username,linkedAt:nowIso()});
+      state.pending=state.pending.filter(x=>x.code!==code);saveLinkState(state);
+      await message.reply({content:`✅ Linked Discord **${message.author.username}** to Roblox **${pending.username}** for Bay Café activity tracking.`,allowedMentions:{repliedUser:false}}).catch(()=>{});
+      await message.author.send(`Your Discord account is now linked to **${pending.username}** on the Bay Café Staff Hub.`).catch(()=>{});
+      auditEvent("discord.linked",{id:pending.robloxId,username:pending.username,displayName:pending.displayName},{discordId:message.author.id,discordUsername:message.author.username});
+      return;
+    }
+    const tickets=readJson(FILES.tickets,[]),ticket=tickets.find(x=>x.status==="open"&&String(x.discordThreadId||"")===String(message.channelId));if(ticket&&message.channel?.isThread?.()&&!message.author?.bot){const content=String(message.content||"").trim(),attachmentText=message.attachments?.size?[...message.attachments.values()].map(x=>x.url).join("\n"):"",merged=[content,attachmentText].filter(Boolean).join("\n").slice(0,1800);if(merged){ticket.messages??=[];ticket.messages.push({id:`discord-${message.id}`,authorType:"staff",authorId:message.author.id,authorDisplayName:message.member?.displayName||message.author.globalName||message.author.username,authorUsername:message.author.username,content:merged,createdAt:message.createdAt.toISOString(),source:"discord"});ticket.updatedAt=new Date().toISOString();writeJson(FILES.tickets,tickets);broadcast("ticket:update",publicTicket(ticket));}return;}await persistDiscordMessage(message).catch(e=>console.error(`[Bay Café] Discord message tracking failed: ${e.message}`));});discordClient.on("messageUpdate",async(_old,newMessage)=>{const full=newMessage.partial?await newMessage.fetch().catch(()=>null):newMessage;if(full)await persistDiscordMessage(full).catch(()=>null);});discordClient.on("messageDelete",async message=>removeDiscordMessage(message.id));await discordClient.login(DISCORD_BOT_TOKEN);}
 
 app.get("/api/health",(_req,res)=>res.json({
   success:true,

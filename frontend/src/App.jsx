@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {Activity,Archive,ArrowRight,ArrowUpRight,Bell,BookOpen,BriefcaseBusiness,Cake,CheckCircle2,ChevronRight,Coffee,ExternalLink,FilePenLine,Gauge,Gift,LifeBuoy,Link2,LogOut,Megaphone,Menu,MessageCircleMore,Plus,Search,ShieldCheck,Sparkles,Ticket,Trash2,UserRoundSearch,Users,Waves,X} from "lucide-react";
+import {Activity,Archive,ArrowRight,ArrowUpRight,Bell,BookOpen,BriefcaseBusiness,Cake,CheckCircle2,ChevronRight,Coffee,ExternalLink,FilePenLine,Gauge,Gift,LifeBuoy,Link2,LogOut,Megaphone,Menu,MessageCircleMore,Plus,Search,ShieldCheck,Sparkles,Ticket,Trash2,UserRoundSearch,Users,Waves,X,AlertTriangle,Building2,CalendarDays,ClipboardList,Clock3,Gavel,History,Network,UserCheck} from "lucide-react";
 import bayHeroArt from "./assets/bay-photo-sunset.svg";
 import careersArt from "./assets/bay-photo-coffee.svg";
 import communityArt from "./assets/bay-photo-boardwalk.svg";
@@ -906,6 +906,8 @@ function Dashboard({token,user,onLogout,onCommunity}){
       String(user.tier||"").toLowerCase()
     );
 
+  const canModerateStaff=Number(user.level||0)>=2;
+
   const nav=[
     {id:"overview",label:"Overview",icon:Waves,section:"MAIN",show:true},
     {id:"announcements",label:"Announcements",icon:Megaphone,section:"MAIN",show:true},
@@ -913,11 +915,21 @@ function Dashboard({token,user,onLogout,onCommunity}){
     {id:"discord",label:"My Activity",icon:MessageCircleMore,section:"ACTIVITY",show:caps.discord},
     {id:"activityAdmin",label:"Team Activity",icon:Gauge,section:"ACTIVITY",show:hasLeadershipAccess},
     {id:"communityAdmin",label:"Birthdays",icon:Cake,section:"COMMUNITY",show:hasLeadershipAccess},
+    {id:"schedule",label:"Schedule",icon:CalendarDays,section:"COMMUNITY",show:true},
+    {id:"loa",label:"LOA",icon:Clock3,section:"COMMUNITY",show:true},
 
     {id:"careers",label:"Careers",icon:BriefcaseBusiness,section:"STAFF",show:true},
+    {id:"reviews",label:"Application Reviews",icon:ClipboardList,section:"STAFF",show:hasLeadershipAccess},
+    {id:"discipline",label:"Staff Records",icon:Gavel,section:"STAFF",show:canModerateStaff},
     {id:"applications",label:"Applications",icon:FilePenLine,section:"STAFF",show:hasLeadershipAccess},
 
     {id:"information",label:"Staff Info",icon:BookOpen,section:"TOOLS",show:true},
+    {id:"directory",label:"Staff Directory",icon:Users,section:"TOOLS",show:true},
+    {id:"departments",label:"Departments",icon:Building2,section:"TOOLS",show:true},
+    {id:"connections",label:"Connections",icon:Network,section:"TOOLS",show:true},
+    {id:"search",label:"Search",icon:Search,section:"TOOLS",show:true},
+    {id:"notifications",label:"Notifications",icon:Bell,section:"TOOLS",show:true},
+    {id:"audit",label:"Audit Log",icon:History,section:"TOOLS",show:hasLeadershipAccess},
     {id:"profiles",label:"Profiles",icon:UserRoundSearch,section:"TOOLS",show:caps.profiles},
     {id:"tickets",label:"Support",icon:LifeBuoy,section:"TOOLS",show:caps.tickets}
   ].filter(item=>item.show);
@@ -1112,6 +1124,16 @@ function Dashboard({token,user,onLogout,onCommunity}){
     page==="applications"?"Applications":
     page==="activityAdmin"?"Activity Management":
     page==="communityAdmin"?"Birthdays":
+    page==="schedule"?"Schedule":
+    page==="loa"?"Leave of Absence":
+    page==="reviews"?"Application Reviews":
+    page==="discipline"?"Staff Records":
+    page==="directory"?"Staff Directory":
+    page==="departments"?"Departments":
+    page==="connections"?"Connections":
+    page==="search"?"Search":
+    page==="notifications"?"Notifications":
+    page==="audit"?"Audit Log":
     page==="information"?"Information Hub":
     page==="profiles"?"Profile Lookup":
     page==="tickets"?"Support Center":
@@ -1231,6 +1253,16 @@ function Dashboard({token,user,onLogout,onCommunity}){
 
         {page==="activityAdmin"&&hasLeadershipAccess&&<ActivityAdminPage token={token} setToast={setToast}/>} 
         {page==="communityAdmin"&&hasLeadershipAccess&&<CommunityAdminPage token={token} birthdays={birthdays} reloadBirthdays={loadBirthdays} setToast={setToast}/>} 
+        {page==="schedule"&&<SchedulePage token={token} user={user} setToast={setToast}/>} 
+        {page==="loa"&&<LoaPage token={token} user={user} setToast={setToast}/>} 
+        {page==="reviews"&&hasLeadershipAccess&&<ApplicationReviewsPage token={token} setToast={setToast}/>} 
+        {page==="discipline"&&canModerateStaff&&<DisciplinePage token={token} user={user} setToast={setToast}/>} 
+        {page==="directory"&&<StaffDirectoryPage token={token} user={user}/>} 
+        {page==="departments"&&<DepartmentsPage token={token} user={user} setToast={setToast}/>} 
+        {page==="connections"&&<ConnectionsPage token={token} user={user} setToast={setToast}/>} 
+        {page==="search"&&<GlobalSearchPage token={token}/>} 
+        {page==="notifications"&&<NotificationsPage token={token}/>} 
+        {page==="audit"&&hasLeadershipAccess&&<AuditLogPage token={token}/>} 
         {page==="information"&&<InformationHub user={user}/>} 
         {page==="profiles"&&<Profiles token={token}/>}
         {page==="tickets"&&
@@ -2610,6 +2642,66 @@ function Profiles({token}){
     </div>
   </div>;
 }
+
+function PanelNote({children,tone=""}){return <div className={`ops-note ${tone}`}>{children}</div>;}
+
+function LoaPage({token,user,setToast}){
+  const[items,setItems]=useState([]),[form,setForm]=useState({startDate:"",endDate:"",reason:""}),[reviewNote,setReviewNote]=useState({});
+  const admin=Number(user.level||0)>=4;
+  const load=()=>api("/api/loa",{},token).then(r=>setItems(r.loas||[]));useEffect(()=>{load().catch(()=>{})},[token]);
+  const submit=async e=>{e.preventDefault();try{await api("/api/loa",{method:"POST",body:JSON.stringify(form)},token);setForm({startDate:"",endDate:"",reason:""});await load();setToast("LOA submitted") }catch(err){setToast(err.message)}};
+  const review=async(item,status)=>{try{const r=await api(`/api/loa/${item.id}`,{method:"PUT",body:JSON.stringify({status,reviewNote:reviewNote[item.id]||""})},token);await load();setToast(`${status==="approved"?"Approved":"Denied"}${r.dm?.sent?" • DM sent":""}`)}catch(err){setToast(err.message)}};
+  return <div className="page-stack"><SectionHead kicker="LEAVE OF ABSENCE" title="LOA requests" text={admin?"Review staff requests or submit your own.":"Submit time away so Leadership can account for your activity."}/><div className="ops-two-col"><form className="ops-card" onSubmit={submit}><h3>Request LOA</h3><label><span>START DATE</span><input type="date" value={form.startDate} onChange={e=>setForm({...form,startDate:e.target.value})}/></label><label><span>END DATE</span><input type="date" value={form.endDate} onChange={e=>setForm({...form,endDate:e.target.value})}/></label><label><span>REASON</span><textarea rows="5" value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})} placeholder="Why do you need time away?"/></label><button className="primary-btn">Submit request</button></form><div className="ops-list">{items.length?items.map(item=><article className="ops-row" key={item.id}><div className="ops-row-main"><div className="ops-row-head"><strong>{item.displayName||item.username}</strong><Badge tone={item.status==="approved"?"green":item.status==="denied"?"sand":"aqua"}>{item.status}</Badge></div><span>@{item.username} • {item.startDate} → {item.endDate}</span><p>{item.reason}</p>{item.reviewNote&&<small>Reviewer note: {item.reviewNote}</small>}</div>{admin&&item.status==="pending"&&<div className="ops-actions"><input value={reviewNote[item.id]||""} onChange={e=>setReviewNote({...reviewNote,[item.id]:e.target.value})} placeholder="Optional reviewer note"/><button className="secondary-btn compact" onClick={()=>review(item,"approved")}>Approve</button><button className="secondary-btn compact" onClick={()=>review(item,"denied")}>Deny</button></div>}</article>):<Empty icon={Clock3} title="No LOA requests" text="Requests will appear here."/>}</div></div></div>;
+}
+
+function ConnectionsPage({token,user,setToast}){
+  const[link,setLink]=useState(null),[code,setCode]=useState(null),[game,setGame]=useState(null);
+  const load=async()=>{const[l,g]=await Promise.all([api("/api/link",{},token),api("/api/game/activity/me",{},token)]);setLink(l.link);setGame(g)};useEffect(()=>{load().catch(()=>{})},[token]);
+  const start=async()=>{try{const r=await api("/api/link/start",{method:"POST"},token);setCode(r);setToast("Link code created") }catch(e){setToast(e.message)}};
+  const unlink=async()=>{try{await api("/api/link/unlink",{method:"POST"},token);setLink(null);setCode(null);setToast("Discord unlinked")}catch(e){setToast(e.message)}};
+  return <div className="page-stack"><SectionHead kicker="ACCOUNT CONNECTIONS" title="Connect Roblox and Discord" text="Link once so Discord activity is tracked by your actual Discord user ID instead of name matching."/><div className="ops-grid-3"><article className="ops-card"><Network size={20}/><h3>Discord link</h3>{link?<><PanelNote tone="success">Linked to <strong>{link.discordUsername}</strong></PanelNote><button className="secondary-btn" onClick={unlink}>Unlink Discord</button></>:<><p>Generate a code, then run it in the Bay Café Discord.</p><button className="primary-btn" onClick={start}>Generate link code</button>{code&&<div className="link-code"><span>RUN IN DISCORD</span><strong>{code.command}</strong><small>Expires in {code.expiresInMinutes} minutes.</small></div>}</>}</article><article className="ops-card"><Activity size={20}/><h3>Discord activity</h3><p>{link?"Your weekly Discord counts now use your linked Discord ID.":"Link Discord to make your personal activity counts exact."}</p></article><article className="ops-card"><Gauge size={20}/><h3>In-game activity</h3><strong className="big-stat">{Math.round(Number(game?.activity?.minutes||0))} min</strong><p>{game?.enabled?"Game tracking backend is ready. It will begin recording once the Roblox game integration script is installed.":"Ready for the game release. Add GAME_ACTIVITY_SECRET when you connect the Roblox game."}</p></article></div></div>;
+}
+
+function DisciplinePage({token,user,setToast}){
+  const[staff,setStaff]=useState([]),[records,setRecords]=useState([]),[selected,setSelected]=useState(null),[form,setForm]=useState({type:"verbal",reason:"",evidence:""});const leadership=Number(user.level||0)>=4;
+  const load=async()=>{const[s,r]=await Promise.all([api("/api/staff-directory",{},token),api("/api/discipline",{},token)]);setStaff(s.staff||[]);setRecords(r.items||[])};useEffect(()=>{load().catch(()=>{})},[token]);
+  const issue=async e=>{e.preventDefault();if(!selected)return setToast("Select a staff member");try{const r=await api("/api/discipline",{method:"POST",body:JSON.stringify({...form,robloxId:selected.id,username:selected.username,displayName:selected.displayName})},token);setForm({type:"verbal",reason:"",evidence:""});await load();setToast(`${form.type==="strike"?"Strike":"Warning"} recorded${r.dm?.sent?" • DM sent":` • ${r.dm?.reason||"DM not sent"}`}`)}catch(err){setToast(err.message)}};
+  const demote=async member=>{try{const r=await api("/api/discipline/demote",{method:"POST",body:JSON.stringify({robloxId:member.id,username:member.username,displayName:member.displayName,reason:"Three active strikes"})},token);await load();setToast(`Demotion recorded${r.dm?.sent?" • DM sent":""}`)}catch(err){setToast(err.message)}};
+  return <div className="page-stack"><SectionHead kicker="STAFF RECORDS" title="Warnings, strikes, and demotions" text="Disciplinary actions are recorded here. The Discord bot DMs linked staff automatically."/><div className="ops-two-col"><form className="ops-card" onSubmit={issue}><label><span>STAFF MEMBER</span><select value={selected?.id||""} onChange={e=>setSelected(staff.find(x=>String(x.id)===e.target.value)||null)}><option value="">Select staff...</option>{staff.map(m=><option value={m.id} key={m.id}>{m.displayName} (@{m.username}) • {m.roleName}</option>)}</select></label>{selected&&<PanelNote>{selected.activeStrikes||0}/3 active strikes {selected.linked?"• Discord linked":"• Discord not linked"}</PanelNote>}<label><span>ACTION</span><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option value="verbal">Verbal Warning</option><option value="warning">Warning</option><option value="strike">Strike</option></select></label><label><span>REASON</span><textarea rows="4" value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})}/></label><label><span>EVIDENCE / NOTES</span><textarea rows="3" value={form.evidence} onChange={e=>setForm({...form,evidence:e.target.value})}/></label><button className="primary-btn">Issue & DM</button>{leadership&&selected&&(selected.activeStrikes||0)>=3&&<button type="button" className="danger-btn" onClick={()=>demote(selected)}>Record demotion (3 strikes)</button>}<small className="muted-note">Demotion records the action and DMs the member. Roblox rank changes remain manual until group-write automation is enabled.</small></form><div className="ops-list">{records.slice(0,100).map(r=><article className="ops-row" key={r.id}><div><div className="ops-row-head"><strong>{r.displayName||r.username}</strong><Badge tone={r.type==="strike"||r.type==="demotion"?"sand":"aqua"}>{r.type}</Badge></div><span>@{r.username} • {formatDate(r.createdAt)} • by {r.issuedBy?.displayName||r.issuedBy?.username}</span><p>{r.reason}</p>{r.active===false&&<small>VOIDED</small>}</div></article>)}</div></div></div>;
+}
+
+function SchedulePage({token,user,setToast}){
+ const[items,setItems]=useState([]),[form,setForm]=useState({title:"",type:"Training",startsAt:"",host:"",notes:""});const admin=Number(user.level||0)>=4;const load=()=>api("/api/schedules",{},token).then(r=>setItems(r.items||[]));useEffect(()=>{load().catch(()=>{})},[token]);const create=async e=>{e.preventDefault();try{await api("/api/schedules",{method:"POST",body:JSON.stringify(form)},token);setForm({title:"",type:"Training",startsAt:"",host:"",notes:""});await load();setToast("Scheduled") }catch(err){setToast(err.message)}};const del=async id=>{await api(`/api/schedules/${id}`,{method:"DELETE"},token);await load()};
+ return <div className="page-stack"><SectionHead kicker="UPCOMING" title="Trainings, shifts, and meetings" text="Keep staff sessions in one place."/>{admin&&<form className="ops-inline-form" onSubmit={create}><input placeholder="Title" value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option>Training</option><option>Shift</option><option>Meeting</option><option>Event</option></select><input type="datetime-local" value={form.startsAt} onChange={e=>setForm({...form,startsAt:e.target.value})}/><input placeholder="Host" value={form.host} onChange={e=>setForm({...form,host:e.target.value})}/><button className="primary-btn">Add</button></form>}<div className="ops-list">{items.length?items.map(x=><article className="ops-row" key={x.id}><CalendarDays size={18}/><div className="ops-row-main"><div className="ops-row-head"><strong>{x.title}</strong><Badge>{x.type}</Badge></div><span>{x.startsAt} • Host: {x.host}</span>{x.notes&&<p>{x.notes}</p>}</div>{admin&&<button className="icon-btn" onClick={()=>del(x.id)}><Trash2 size={14}/></button>}</article>):<Empty icon={CalendarDays} title="Nothing scheduled" text="Upcoming sessions will appear here."/>}</div></div>;
+}
+
+function ApplicationReviewsPage({token,setToast}){
+ const[items,setItems]=useState([]),[notes,setNotes]=useState({});const load=()=>api("/api/application-submissions",{},token).then(r=>setItems(r.submissions||[]));useEffect(()=>{load().catch(()=>{})},[token]);const review=async(item,status)=>{try{await api(`/api/application-submissions/${item.id}/review`,{method:"PATCH",body:JSON.stringify({status,reviewNote:notes[item.id]||""})},token);await load();setToast(`Application ${status}`)}catch(e){setToast(e.message)}};
+ return <div className="page-stack"><SectionHead kicker="APPLICATION REVIEWS" title="Review submissions" text="Accept, deny, or place applications on hold. Linked applicants receive a Discord DM."/><div className="ops-list">{items.map(item=><article className="ops-row submission-review" key={item.id}><div className="ops-row-main"><div className="ops-row-head"><strong>{item.applicationTitle||item.title||"Application"}</strong><Badge tone={item.status==="accepted"?"green":item.status==="denied"?"sand":"aqua"}>{item.status||"pending"}</Badge></div><span>{item.displayName||item.username||item.userUsername||"Applicant"} • {formatDate(item.createdAt)}</span>{item.answers&&<details><summary>View answers</summary><pre>{JSON.stringify(item.answers,null,2)}</pre></details>}<input value={notes[item.id]||item.reviewNote||""} onChange={e=>setNotes({...notes,[item.id]:e.target.value})} placeholder="Reviewer note"/></div><div className="ops-actions"><button className="secondary-btn compact" onClick={()=>review(item,"accepted")}>Accept</button><button className="secondary-btn compact" onClick={()=>review(item,"hold")}>Hold</button><button className="secondary-btn compact" onClick={()=>review(item,"denied")}>Deny</button></div></article>)}</div></div>;
+}
+
+function StaffDirectoryPage({token,user}){
+ const[staff,setStaff]=useState([]),[q,setQ]=useState(""),[selected,setSelected]=useState(null);useEffect(()=>{api("/api/staff-directory",{},token).then(r=>setStaff(r.staff||[])).catch(()=>{})},[token]);const filtered=staff.filter(m=>`${m.username} ${m.displayName} ${m.roleName}`.toLowerCase().includes(q.toLowerCase()));const open=async m=>{setSelected({loading:true,...m});try{const r=await api(`/api/staff/${m.id}/summary`,{},token);setSelected(r.member)}catch{setSelected(m)}};
+ return <div className="page-stack"><SectionHead kicker="STAFF DIRECTORY" title="Everyone in one place" text="Ranks, linked accounts, activity, LOAs, strikes, and future game activity."/><div className="directory-toolbar"><Search size={16}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search staff..."/></div><div className="staff-directory-grid">{filtered.map(m=><button className="staff-directory-card" key={m.id} onClick={()=>open(m)}><div className="directory-avatar">{m.avatar?<img src={m.avatar} alt=""/>:<Users size={19}/>}</div><div><strong>{m.displayName}</strong><span>@{m.username}</span><small>{m.roleName}</small></div><div className="directory-badges"><Badge tone={m.linked?"green":"sand"}>{m.linked?"LINKED":"UNLINKED"}</Badge>{m.loa&&<Badge>LOA</Badge>}{m.activeStrikes>0&&<Badge tone="sand">{m.activeStrikes} STRIKE{m.activeStrikes===1?"":"S"}</Badge>}</div></button>)}</div>{selected&&<div className="profile-drawer"><button className="profile-drawer-close" onClick={()=>setSelected(null)}><X size={16}/></button><h2>{selected.displayName}</h2><span>@{selected.username} • {selected.roleName}</span><div className="profile-drawer-stats"><div><strong>{selected.messageCount||0}</strong><span>Discord messages</span></div><div><strong>{Math.round(selected.game?.minutes||selected.gameMinutes||0)}</strong><span>Game minutes</span></div><div><strong>{selected.discipline?.filter?.(x=>x.type==="strike"&&x.active!==false).length??selected.activeStrikes??0}</strong><span>Active strikes</span></div></div>{selected.loa&&<PanelNote>Approved LOA: {selected.loa.startDate} → {selected.loa.endDate}</PanelNote>}</div>}</div>;
+}
+
+function DepartmentsPage({token,user,setToast}){
+ const[items,setItems]=useState([]);const admin=Number(user.level||0)>=4;const load=()=>api("/api/departments",{},token).then(r=>setItems(r.departments||[]));useEffect(()=>{load().catch(()=>{})},[token]);const update=(i,field,value)=>setItems(items.map((x,index)=>index===i?{...x,[field]:value}:x));const save=async()=>{try{await api("/api/departments",{method:"PUT",body:JSON.stringify({departments:items})},token);setToast("Departments saved")}catch(e){setToast(e.message)}};
+ return <div className="page-stack"><SectionHead kicker="DEPARTMENTS" title="How Bay Café is organized" text="Human Resources, Public Relations, and Operations." right={admin?<button className="primary-btn" onClick={save}>Save changes</button>:null}/><div className="ops-grid-3">{items.map((d,i)=><article className="ops-card department-card" key={d.id}><Building2 size={20}/>{admin?<input value={d.name} onChange={e=>update(i,"name",e.target.value)}/>:<h3>{d.name}</h3>}{admin?<textarea rows="5" value={d.description} onChange={e=>update(i,"description",e.target.value)}/>:<p>{d.description}</p>}<label><span>LEAD</span>{admin?<input value={d.lead||""} onChange={e=>update(i,"lead",e.target.value)} placeholder="Department lead"/>:<strong>{d.lead||"Not assigned"}</strong>}</label></article>)}</div></div>;
+}
+
+function NotificationsPage({token}){
+ const[items,setItems]=useState([]);const load=()=>api("/api/notifications",{},token).then(r=>setItems(r.notifications||[]));useEffect(()=>{load().catch(()=>{})},[token]);const mark=async()=>{await api("/api/notifications/read",{method:"POST",body:JSON.stringify({ids:[]})},token);await load()};return <div className="page-stack"><SectionHead kicker="NOTIFICATIONS" title="Your updates" text="LOA decisions, application results, staff records, and other account updates." right={<button className="secondary-btn" onClick={mark}>Mark all read</button>}/><div className="ops-list">{items.length?items.map(n=><article className={`ops-row notification-row ${n.read?"read":"unread"}`} key={n.id}><Bell size={17}/><div><strong>{n.title}</strong><span>{formatDate(n.createdAt)}</span><p>{n.message}</p></div></article>):<Empty icon={Bell} title="No notifications" text="You're all caught up."/>}</div></div>;
+}
+
+function AuditLogPage({token}){
+ const[items,setItems]=useState([]);useEffect(()=>{api("/api/audit",{},token).then(r=>setItems(r.items||[])).catch(()=>{})},[token]);return <div className="page-stack"><SectionHead kicker="AUDIT LOG" title="Recent staff actions" text="Important website actions are recorded for accountability."/><div className="audit-table">{items.map(x=><div className="audit-row" key={x.id}><History size={14}/><div><strong>{x.action}</strong><span>{x.actor?.displayName||x.actor?.username} • {formatDate(x.createdAt)}</span></div><small>{x.target?.username||x.target?.title||x.target?.scheduleId||""}</small></div>)}</div></div>;
+}
+
+function GlobalSearchPage({token}){
+ const[q,setQ]=useState(""),[items,setItems]=useState([]),[loading,setLoading]=useState(false);useEffect(()=>{if(q.trim().length<2){setItems([]);return}let cancelled=false;const t=setTimeout(async()=>{setLoading(true);try{const r=await api(`/api/search?q=${encodeURIComponent(q)}`,{},token);if(!cancelled)setItems(r.results||[])}finally{if(!cancelled)setLoading(false)}},160);return()=>{cancelled=true;clearTimeout(t)}},[q,token]);return <div className="page-stack"><SectionHead kicker="SEARCH" title="Search the Staff Hub" text="Find staff, applications, tickets, and scheduled sessions."/><div className="global-search-box"><Search size={19}/><input autoFocus value={q} onChange={e=>setQ(e.target.value)} placeholder="Search Bay Café..."/><span>{loading?"Searching...":items.length?`${items.length} found`:""}</span></div><div className="ops-list">{items.map((x,i)=><article className="ops-row" key={`${x.type}-${x.id}-${i}`}><Badge>{x.type}</Badge><div><strong>{x.title}</strong><span>{x.subtitle}</span></div></article>)}</div></div>;
+}
+
 function TicketsPage({token,user,items,reload,setToast}){const[form,setForm]=useState({type:"General Support",subject:"",details:""}),[selectedId,setSelectedId]=useState(""),[reply,setReply]=useState(""),[loading,setLoading]=useState(false);const selected=items.find(x=>x.id===selectedId)||items[0]||null;useEffect(()=>{if(!selectedId&&items[0])setSelectedId(items[0].id)},[items,selectedId]);const submit=async e=>{e.preventDefault();setLoading(true);try{const r=await api("/api/tickets",{method:"POST",body:JSON.stringify(form)},token);setForm({type:"General Support",subject:"",details:""});await reload();setSelectedId(r.ticket.id);setToast("Support ticket opened")}catch(err){setToast(err.message)}finally{setLoading(false)}};const sendReply=async e=>{e.preventDefault();if(!selected||!reply.trim())return;try{const r=await api(`/api/tickets/${selected.id}/messages`,{method:"POST",body:JSON.stringify({content:reply})},token);setReply("");await reload();setSelectedId(r.ticket.id)}catch(err){setToast(err.message)}};const closeTicket=async()=>{if(!selected)return;try{await api(`/api/tickets/${selected.id}/close`,{method:"POST"},token);await reload();setToast("Ticket closed")}catch(err){setToast(err.message)}};return <div className="page-stack"><SectionHead kicker="SUPPORT CENTER" title="Website support." text="Create a ticket here and continue the conversation from the website. Discord staff can reply through the linked thread when configured."/><div className="ticket-layout"><aside className="ticket-side"><form className="ticket-form" onSubmit={submit}><h3>New Ticket</h3><label><span>TYPE</span><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option>General Support</option><option>Management Question</option><option>Exploiter Report</option><option>Resignation</option><option>Other</option></select></label><label><span>SUBJECT</span><input value={form.subject} onChange={e=>setForm({...form,subject:e.target.value})} placeholder="Short summary"/></label><label><span>MESSAGE</span><textarea rows="5" value={form.details} onChange={e=>setForm({...form,details:e.target.value})} placeholder="Explain what you need help with..."/></label><button className="primary-btn" disabled={loading}>{loading?"Opening...":"Open Ticket"}<Ticket size={14}/></button></form><div className="ticket-list"><div className="ticket-list-head"><strong>{user.capabilities?.ticketAdmin?"All Tickets":"Your Tickets"}</strong><span>{items.length}</span></div>{items.map(item=><button key={item.id} className={selected?.id===item.id?"active":""} onClick={()=>setSelectedId(item.id)}><div><strong>{item.subject}</strong><span>{item.type}</span></div><Badge tone={item.status==="open"?"green":"sand"}>{item.status}</Badge></button>)}</div></aside><section className="ticket-thread">{selected?<><div className="ticket-thread-head"><div><span className="eyebrow">{selected.type}</span><h3>{selected.subject}</h3><small>{selected.id}</small></div><div className="thread-actions"><Badge tone={selected.status==="open"?"green":"sand"}>{selected.status}</Badge>{selected.status==="open"&&<button className="secondary-btn compact" onClick={closeTicket}>Close</button>}</div></div><div className="ticket-messages">{(selected.messages||[]).map(m=><article key={m.id} className={String(m.authorId)===String(user.id)?"mine":"staff"}><div><strong>{m.authorDisplayName||m.authorUsername}</strong><span>{m.authorType==="staff"?"STAFF":"USER"}</span><small>{formatDate(m.createdAt)}</small></div><p>{m.content}</p></article>)}</div>{selected.status==="open"?<form className="ticket-reply" onSubmit={sendReply}><textarea rows="3" value={reply} onChange={e=>setReply(e.target.value)} placeholder="Write a reply..."/><button className="primary-btn">Send Reply<MessageCircleMore size={14}/></button></form>:<div className="closed-note">This ticket is closed.</div>}</>:<Empty icon={LifeBuoy} title="Select a ticket" text="Your support conversation will appear here."/>}</section></div></div>;}
 
 export default function App(){
