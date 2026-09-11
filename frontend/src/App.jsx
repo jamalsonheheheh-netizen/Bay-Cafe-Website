@@ -1,9 +1,9 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {Activity,Archive,ArrowRight,ArrowUpRight,Bell,BookOpen,BriefcaseBusiness,Cake,CheckCircle2,ChevronRight,Coffee,ExternalLink,FilePenLine,Gauge,Gift,LifeBuoy,Link2,LogOut,Megaphone,Menu,MessageCircleMore,Plus,Search,ShieldCheck,Sparkles,Ticket,Trash2,UserRoundSearch,Users,Waves,X} from "lucide-react";
-import bayHeroArt from "./assets/bay-hero-art.svg";
-import careersArt from "./assets/careers-art.svg";
-import communityArt from "./assets/community-art.svg";
-import sunsetArt from "./assets/sunset-art.svg";
+import bayHeroArt from "./assets/bay-photo-sunset.svg";
+import careersArt from "./assets/bay-photo-coffee.svg";
+import communityArt from "./assets/bay-photo-boardwalk.svg";
+import sunsetArt from "./assets/bay-photo-pastries.svg";
 
 const IS_LOCAL =
   ["localhost", "127.0.0.1"].includes(
