@@ -96,6 +96,12 @@ function useSession(){
 
   const[checking,setChecking]=useState(Boolean(token));
 
+  const saveToken=nextToken=>{
+    if(!nextToken)return;
+    localStorage.setItem(TOKEN_KEY,nextToken);
+    setToken(nextToken);
+  };
+
   const clearSavedSession=()=>{
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
@@ -115,11 +121,8 @@ function useSession(){
       .then(result=>{
         if(cancelled)return;
 
-        const activeToken=result.token||token;
-
-        if(activeToken!==token){
-          localStorage.setItem(TOKEN_KEY,activeToken);
-          setToken(activeToken);
+        if(result.token&&result.token!==token){
+          saveToken(result.token);
         }
 
         setUser(result.user);
@@ -131,8 +134,6 @@ function useSession(){
       .catch(error=>{
         if(cancelled)return;
 
-        // A real expired/invalid session should be removed. Temporary
-        // Railway/network failures should not erase the remembered device.
         if(error?.status===401){
           clearSavedSession();
         }
@@ -148,8 +149,7 @@ function useSession(){
     };
   },[token]);
 
-  // Sliding 7-day login: actual interaction with the site refreshes the
-  // server-side last-active timestamp. Background tabs alone do not.
+  // Real interaction refreshes the 7-day inactivity window.
   useEffect(()=>{
     if(!token)return;
 
@@ -164,22 +164,34 @@ function useSession(){
       }
 
       lastTouch=now;
-
       clearTimeout(timer);
+
       timer=setTimeout(()=>{
         api(
           "/api/auth/touch",
           {method:"POST"},
           token
-        ).catch(error=>{
-          if(error?.status===401){
-            clearSavedSession();
-          }
-        });
+        )
+          .then(result=>{
+            if(result.token){
+              saveToken(result.token);
+            }
+          })
+          .catch(error=>{
+            if(error?.status===401){
+              clearSavedSession();
+            }
+          });
       },700);
     };
 
-    const events=["pointerdown","keydown","touchstart","scroll"];
+    const events=[
+      "pointerdown",
+      "keydown",
+      "touchstart",
+      "scroll"
+    ];
+
     events.forEach(name=>
       window.addEventListener(
         name,
@@ -199,13 +211,13 @@ function useSession(){
       visibility
     );
 
-    touch();
-
     return()=>{
       clearTimeout(timer);
+
       events.forEach(name=>
         window.removeEventListener(name,touch)
       );
+
       document.removeEventListener(
         "visibilitychange",
         visibility
@@ -2628,6 +2640,16 @@ export default function App(){
 
   if(staffTransition){
     return <StaffEntryTransition user={transitionUser||session.user}/>;
+  }
+
+  if(session.checking&&session.token&&!session.user){
+    return <main className="session-restore-screen">
+      <div className="session-restore-card">
+        <ShieldCheck size={24}/>
+        <strong>Signing you back in...</strong>
+        <span>Restoring your Bay Café session.</span>
+      </div>
+    </main>;
   }
 
   if(communityOpen){

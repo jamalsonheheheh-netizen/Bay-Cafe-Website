@@ -2789,3 +2789,33 @@
     grid-template-columns:1fr;
   }
 }
+
+
+/* V57 — remembered session restore screen */
+.session-restore-screen{
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  background:#041922;
+}
+
+.session-restore-card{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:8px;
+  color:#dff9fb;
+}
+
+.session-restore-card svg{
+  color:#78d8d3;
+}
+
+.session-restore-card strong{
+  font-size:12px;
+}
+
+.session-restore-card span{
+  color:#7299a2;
+  font-size:9px;
+}

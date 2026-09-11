@@ -498,7 +498,7 @@ async function buildWebsiteUser(username,{allowGuest=false}={}){
 
 const SESSION_SECRET=String(process.env.SESSION_SIGNING_SECRET||process.env.DISCORD_BOT_TOKEN||"bay-cafe-local-development-only");
 const SESSION_IDLE_MS=7*24*60*60*1000;
-const SESSION_TOUCH_WRITE_MS=5*60*1000;
+const SESSION_REFRESH_MS=5*60*1000;
 const sign=value=>crypto.createHmac("sha256",SESSION_SECRET).update(value).digest("base64url");
 
 function safeSignatureMatches(value,signature){
@@ -511,33 +511,21 @@ function safeSignatureMatches(value,signature){
   }
 }
 
-function readSessions(){
-  const sessions=readJson(FILES.sessions,{});
-  return sessions&&typeof sessions==="object"&&!Array.isArray(sessions)
-    ? sessions
-    : {};
+function createSessionToken(user,lastActiveAt=Date.now()){
+  const payload=Buffer.from(
+    JSON.stringify({
+      v:3,
+      issuedAt:Date.now(),
+      lastActiveAt:Number(lastActiveAt)||Date.now(),
+      nonce:crypto.randomUUID(),
+      user
+    })
+  ).toString("base64url");
+
+  return `bay3.${payload}.${sign(payload)}`;
 }
 
-function saveSessions(sessions){
-  writeJson(FILES.sessions,sessions);
-}
-
-function createSessionToken(user){
-  const sessionId=crypto.randomUUID();
-  const now=Date.now();
-  const sessions=readSessions();
-
-  sessions[sessionId]={
-    user,
-    createdAt:now,
-    lastActiveAt:now
-  };
-
-  saveSessions(sessions);
-  return `bay2.${sessionId}.${sign(sessionId)}`;
-}
-
-function readSessionToken(token,{touch=false}={}){
+function readSessionToken(token){
   const p=String(token||"").split(".");
   const now=Date.now();
 
@@ -545,44 +533,39 @@ function readSessionToken(token,{touch=false}={}){
     return null;
   }
 
-  if(p[0]==="bay2"){
-    const sessionId=p[1];
+  // V57+ stateless session: survives Railway/backend restarts.
+  if(p[0]==="bay3"&&safeSignatureMatches(p[1],p[2])){
+    try{
+      const payload=JSON.parse(
+        Buffer.from(p[1],"base64url").toString("utf8")
+      );
 
-    if(!safeSignatureMatches(sessionId,p[2])){
+      const lastActiveAt=Number(
+        payload?.lastActiveAt||
+        payload?.issuedAt||
+        0
+      );
+
+      if(
+        !payload?.user||
+        !lastActiveAt||
+        now-lastActiveAt>SESSION_IDLE_MS
+      ){
+        return null;
+      }
+
+      return {
+        user:payload.user,
+        lastActiveAt,
+        legacy:false,
+        needsRefresh:now-lastActiveAt>=SESSION_REFRESH_MS
+      };
+    }catch{
       return null;
     }
-
-    const sessions=readSessions();
-    const record=sessions[sessionId];
-
-    if(!record?.user){
-      return null;
-    }
-
-    const lastActiveAt=Number(record.lastActiveAt||record.createdAt||0);
-
-    if(!lastActiveAt||now-lastActiveAt>SESSION_IDLE_MS){
-      delete sessions[sessionId];
-      saveSessions(sessions);
-      return null;
-    }
-
-    if(touch&&now-lastActiveAt>=SESSION_TOUCH_WRITE_MS){
-      record.lastActiveAt=now;
-      sessions[sessionId]=record;
-      saveSessions(sessions);
-    }
-
-    return {
-      user:record.user,
-      sessionId,
-      legacy:false,
-      lastActiveAt:Number(record.lastActiveAt||lastActiveAt)
-    };
   }
 
-  // Allow recent V51/V52 browser sessions to migrate once instead of
-  // forcing everyone to verify again immediately after this update.
+  // Migrate the original signed V51/V52 token if it is still within 7 days.
   if(p[0]==="bay1"&&safeSignatureMatches(p[1],p[2])){
     try{
       const payload=JSON.parse(
@@ -601,12 +584,37 @@ function readSessionToken(token,{touch=false}={}){
 
       return {
         user:payload.user,
-        sessionId:null,
+        lastActiveAt:issuedAt,
         legacy:true,
-        lastActiveAt:issuedAt
+        needsRefresh:true
       };
     }catch{
       return null;
+    }
+  }
+
+  // V53–V56 used server-stored bay2 sessions. Keep them working when
+  // the persistent sessions file is available, then immediately migrate.
+  if(p[0]==="bay2"&&safeSignatureMatches(p[1],p[2])){
+    const sessions=readJson(FILES.sessions,{});
+    const record=sessions?.[p[1]];
+    const lastActiveAt=Number(
+      record?.lastActiveAt||
+      record?.createdAt||
+      0
+    );
+
+    if(
+      record?.user&&
+      lastActiveAt&&
+      now-lastActiveAt<=SESSION_IDLE_MS
+    ){
+      return {
+        user:record.user,
+        lastActiveAt,
+        legacy:true,
+        needsRefresh:true
+      };
     }
   }
 
@@ -620,7 +628,7 @@ function verifySessionToken(token){
 function auth(req,res,next){
   const h=String(req.headers.authorization||"");
   const token=h.startsWith("Bearer ")?h.slice(7).trim():"";
-  const session=readSessionToken(token,{touch:true});
+  const session=readSessionToken(token);
 
   if(!session?.user){
     return res.status(401).json({
@@ -634,7 +642,6 @@ function auth(req,res,next){
   req.session=session;
   next();
 }
-
 const authChallenges=new Map();
 
 app.post("/api/auth/start",async(req,res)=>{
@@ -721,36 +728,36 @@ app.post("/api/auth/verify",async(req,res)=>{
   }
 });
 app.get("/api/auth/me",auth,(req,res)=>{
-  let token=null;
-
-  if(req.session?.legacy){
-    token=createSessionToken(req.user);
-  }
+  const refreshedToken=
+    req.session?.needsRefresh||req.session?.legacy
+      ? createSessionToken(req.user,Date.now())
+      : null;
 
   res.json({
     success:true,
     user:req.user,
     persistent:true,
-    token,
+    token:refreshedToken,
     idleTimeoutDays:7
   });
 });
 
 app.post("/api/auth/touch",auth,(req,res)=>{
+  const token=createSessionToken(
+    req.user,
+    Date.now()
+  );
+
   res.json({
     success:true,
     active:true,
+    token,
     idleTimeoutDays:7
   });
 });
 
-app.post("/api/auth/logout",auth,(req,res)=>{
-  if(req.session?.sessionId){
-    const sessions=readSessions();
-    delete sessions[req.session.sessionId];
-    saveSessions(sessions);
-  }
-
+app.post("/api/auth/logout",auth,(_req,res)=>{
+  // Stateless session: removing the browser token signs the device out.
   res.json({success:true});
 });
 
