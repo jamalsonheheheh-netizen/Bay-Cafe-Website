@@ -3195,3 +3195,166 @@ select:focus{
     border-radius:8px!important;
   }
 }
+
+
+/* V63 — mobile staff login */
+.mobile-ready-login{
+  width:min(520px,calc(100vw - 28px));
+}
+
+.login-method-tabs{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:4px;
+  margin:18px 0;
+  padding:4px;
+  border:1px solid var(--natural-border,rgba(255,255,255,.10));
+  border-radius:9px;
+  background:#061f29;
+}
+
+.login-method-tabs button{
+  min-height:40px;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:#8faeb4;
+  font:inherit;
+  font-size:10px;
+  font-weight:700;
+}
+
+.login-method-tabs button.active{
+  background:#0b3440;
+  color:#e8fbfb;
+}
+
+.mobile-login-panel,
+.mobile-code-form{
+  display:grid;
+  gap:14px;
+}
+
+.mobile-login-help{
+  margin:0;
+  color:#88a8ae;
+  font-size:9px;
+  line-height:1.55;
+}
+
+.mobile-code-sent{
+  padding:10px 12px;
+  border:1px solid rgba(117,217,211,.15);
+  border-radius:7px;
+  background:#072a34;
+  color:#a8c9ce;
+  font-size:9px;
+}
+
+.mobile-code-sent strong{
+  color:#e4f8f8;
+}
+
+.mobile-code-input{
+  min-height:54px!important;
+  text-align:center;
+  font-size:22px!important;
+  font-weight:800;
+  letter-spacing:.22em!important;
+  font-variant-numeric:tabular-nums;
+}
+
+.mobile-login-note{
+  margin-top:4px;
+  padding-top:13px;
+  border-top:1px solid var(--natural-border,rgba(255,255,255,.10));
+}
+
+.mobile-login-note strong,
+.mobile-login-note span{
+  display:block;
+}
+
+.mobile-login-note strong{
+  font-size:9px;
+  color:#c9e7e8;
+}
+
+.mobile-login-note span{
+  margin-top:4px;
+  color:#769ba2;
+  font-size:8px;
+  line-height:1.55;
+}
+
+.login-link-button{
+  min-height:34px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:#8fc7c7;
+  font-size:9px;
+  text-decoration:underline;
+  text-underline-offset:3px;
+}
+
+@media(max-width:760px){
+  .login-shell{
+    min-height:100dvh!important;
+    padding:16px 0!important;
+    align-items:flex-start!important;
+  }
+
+  .mobile-ready-login{
+    width:calc(100vw - 24px)!important;
+    margin:0 auto!important;
+    padding:22px 18px!important;
+    border-radius:10px!important;
+  }
+
+  .login-copy{
+    margin-top:22px!important;
+  }
+
+  .login-copy h1{
+    font-size:34px!important;
+    line-height:1!important;
+  }
+
+  .login-copy p{
+    font-size:11px!important;
+    line-height:1.55!important;
+  }
+
+  .login-method-tabs{
+    position:sticky;
+    top:8px;
+    z-index:2;
+  }
+
+  .login-form .primary-btn,
+  .mobile-code-form .primary-btn{
+    width:100%!important;
+    min-height:48px!important;
+  }
+
+  .verify-panel .button-row{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+  }
+
+  .verify-panel .button-row>a,
+  .verify-panel .button-row>button{
+    width:100%!important;
+  }
+
+  input,
+  select,
+  textarea{
+    font-size:16px!important; /* prevents iOS input zoom */
+  }
+
+  .mobile-code-input{
+    font-size:24px!important;
+  }
+}

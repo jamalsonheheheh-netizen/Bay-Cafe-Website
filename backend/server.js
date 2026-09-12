@@ -644,6 +644,169 @@ function auth(req,res,next){
   next();
 }
 const authChallenges=new Map();
+const mobileLoginChallenges=new Map();
+
+function cleanupMobileLoginChallenges(){
+  const now=Date.now();
+  for(const [id,item] of mobileLoginChallenges){
+    if(!item||Number(item.expiresAt||0)<=now){
+      mobileLoginChallenges.delete(id);
+    }
+  }
+}
+
+
+
+app.post("/api/auth/mobile/start",async(req,res)=>{
+  try{
+    cleanupMobileLoginChallenges();
+
+    const username=String(req.body.username||"").trim();
+    if(!username){
+      return res.status(400).json({success:false,message:"Enter your Roblox username."});
+    }
+
+    const user=await buildWebsiteUser(username,{allowGuest:false});
+
+    if(!isStaffAccess(user)){
+      return res.status(403).json({
+        success:false,
+        message:"Staff access begins at Directing Team."
+      });
+    }
+
+    const link=discordLinkForRobloxId(user.id);
+    if(!link){
+      return res.status(409).json({
+        success:false,
+        code:"DISCORD_NOT_LINKED",
+        message:"This Roblox account is not linked to Discord yet. Sign in with Roblox About once, then open Connections and link your Discord account. After that, Mobile Login will work."
+      });
+    }
+
+    if(!discordClient?.isReady()){
+      return res.status(503).json({
+        success:false,
+        message:"The Bay Café Discord bot is currently offline. Try again in a moment."
+      });
+    }
+
+    const challengeId=crypto.randomUUID();
+    const code=String(crypto.randomInt(100000,1000000));
+    const expiresAt=Date.now()+5*60*1000;
+
+    mobileLoginChallenges.set(challengeId,{
+      userId:String(user.id),
+      username:user.username,
+      codeHash:sign(`mobile:${challengeId}:${code}`),
+      expiresAt,
+      attempts:0
+    });
+
+    try{
+      const discordUser=await discordClient.users.fetch(String(link.discordId));
+      await discordUser.send({
+        embeds:[
+          new EmbedBuilder()
+            .setColor(0x62c9c6)
+            .setTitle("Bay Café Mobile Login")
+            .setDescription(
+              `Your one-time Staff Hub login code is:\n\n**${code}**\n\nThis code expires in **5 minutes**. If you did not request this, ignore this message.`
+            )
+            .setFooter({text:"Bay Café Staff Hub"})
+            .setTimestamp()
+        ]
+      });
+    }catch(error){
+      mobileLoginChallenges.delete(challengeId);
+      return res.status(400).json({
+        success:false,
+        message:"I couldn't DM your linked Discord account. Make sure DMs from server members are enabled, then try again."
+      });
+    }
+
+    res.json({
+      success:true,
+      challengeId,
+      expiresInSeconds:300,
+      user:{
+        username:user.username,
+        displayName:user.displayName,
+        avatar:user.avatar,
+        roleName:user.roleName
+      },
+      discordHint:link.discordUsername
+        ? `@${String(link.discordUsername).slice(0,2)}•••`
+        : "your linked Discord account"
+    });
+  }catch(error){
+    res.status(400).json({
+      success:false,
+      message:error.message||"Unable to start Mobile Login."
+    });
+  }
+});
+
+app.post("/api/auth/mobile/verify",async(req,res)=>{
+  try{
+    cleanupMobileLoginChallenges();
+
+    const challengeId=String(req.body.challengeId||"");
+    const code=String(req.body.code||"").replace(/\D/g,"").slice(0,6);
+    const challenge=mobileLoginChallenges.get(challengeId);
+
+    if(!challenge||challenge.expiresAt<=Date.now()){
+      mobileLoginChallenges.delete(challengeId);
+      return res.status(400).json({
+        success:false,
+        message:"That mobile login code expired. Send yourself a new code."
+      });
+    }
+
+    challenge.attempts=Number(challenge.attempts||0)+1;
+    if(challenge.attempts>6){
+      mobileLoginChallenges.delete(challengeId);
+      return res.status(429).json({
+        success:false,
+        message:"Too many incorrect attempts. Send yourself a new code."
+      });
+    }
+
+    if(code.length!==6||!safeSignatureMatches(`mobile:${challengeId}:${code}`,challenge.codeHash)){
+      return res.status(401).json({
+        success:false,
+        message:"That code isn't correct."
+      });
+    }
+
+    const user=await buildWebsiteUser(challenge.username,{allowGuest:false});
+
+    if(String(user.id)!==String(challenge.userId)||!isStaffAccess(user)){
+      mobileLoginChallenges.delete(challengeId);
+      return res.status(403).json({
+        success:false,
+        message:"Your Bay Café staff access changed. Please sign in again."
+      });
+    }
+
+    user.accessMode="staff";
+    const token=createSessionToken(user);
+    mobileLoginChallenges.delete(challengeId);
+
+    res.json({
+      success:true,
+      token,
+      user,
+      persistent:true,
+      idleTimeoutDays:7
+    });
+  }catch(error){
+    res.status(400).json({
+      success:false,
+      message:error.message||"Unable to finish Mobile Login."
+    });
+  }
+});
 
 app.post("/api/auth/start",async(req,res)=>{
   try{

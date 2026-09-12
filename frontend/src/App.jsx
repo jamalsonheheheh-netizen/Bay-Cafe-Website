@@ -332,12 +332,25 @@ function StaffEntryTransition({user}){
 }
 
 function Login({onLogin,checking,onCommunity}){
+  const[method,setMethod]=useState(
+    ()=>window.matchMedia?.("(max-width: 760px)")?.matches?"mobile":"roblox"
+  );
   const[username,setUsername]=useState("");
   const[challenge,setChallenge]=useState(null);
+  const[mobileChallenge,setMobileChallenge]=useState(null);
+  const[mobileCode,setMobileCode]=useState("");
   const[loading,setLoading]=useState(false);
   const[message,setMessage]=useState("");
 
-  const start=async event=>{
+  const switchMethod=next=>{
+    setMethod(next);
+    setChallenge(null);
+    setMobileChallenge(null);
+    setMobileCode("");
+    setMessage("");
+  };
+
+  const startRoblox=async event=>{
     event?.preventDefault();
 
     if(!username.trim()){
@@ -367,7 +380,7 @@ function Login({onLogin,checking,onCommunity}){
     }
   };
 
-  const verify=async()=>{
+  const verifyRoblox=async()=>{
     setLoading(true);
     setMessage("");
 
@@ -390,96 +403,244 @@ function Login({onLogin,checking,onCommunity}){
     }
   };
 
-  return <main className="login-shell">
-    <div className="water-glow glow-one"/>
-    <div className="water-glow glow-two"/>
+  const startMobile=async event=>{
+    event?.preventDefault();
 
-    <section className="login-card">
+    if(!username.trim()){
+      return setMessage("Enter your Roblox username.");
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try{
+      const result=await api(
+        "/api/auth/mobile/start",
+        {
+          method:"POST",
+          body:JSON.stringify({username})
+        }
+      );
+
+      setMobileChallenge(result);
+      setMessage("Check Discord — I sent your 6-digit login code.");
+    }catch(error){
+      setMessage(error.message);
+    }finally{
+      setLoading(false);
+    }
+  };
+
+  const verifyMobile=async event=>{
+    event?.preventDefault();
+
+    if(mobileCode.replace(/\D/g,"").length!==6){
+      return setMessage("Enter the 6-digit code from the Bay Café bot.");
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try{
+      const result=await api(
+        "/api/auth/mobile/verify",
+        {
+          method:"POST",
+          body:JSON.stringify({
+            challengeId:mobileChallenge.challengeId,
+            code:mobileCode
+          })
+        }
+      );
+
+      onLogin(result.token,result.user);
+    }catch(error){
+      setMessage(error.message);
+    }finally{
+      setLoading(false);
+    }
+  };
+
+  return <main className="login-shell">
+    <section className="login-card mobile-ready-login">
       <div className="brand-row">
         <div className="bay-mark"><Waves size={22}/></div>
         <div>
           <strong>BAY CAFÉ</strong>
-          <span>STAFF WORKSPACE</span>
+          <span>STAFF HUB</span>
         </div>
       </div>
 
       <div className="login-copy">
-        <span className="eyebrow">
-          <ShieldCheck size={13}/>PRIVATE STAFF ACCESS
-        </span>
-
-        <h1>Welcome to<em>the Bay.</em></h1>
-
-        <p>
-          Directing Team and above can access staff tools, community activity,
-          profiles, support, and rank-aware resources.
-        </p>
+        <span className="eyebrow"><ShieldCheck size={13}/>Staff sign in</span>
+        <h1>Sign in to Bay Café.</h1>
+        <p>Directing Team and above can access the Staff Hub.</p>
       </div>
 
-      {!challenge
-        ? <form className="login-form" onSubmit={start}>
-            <label>
-              <span>ROBLOX USERNAME</span>
-              <input
-                value={username}
-                onChange={event=>setUsername(event.target.value)}
-                placeholder="Enter your username"
-              />
-            </label>
+      <div className="login-method-tabs" role="tablist" aria-label="Login method">
+        <button
+          type="button"
+          className={method==="mobile"?"active":""}
+          onClick={()=>switchMethod("mobile")}
+        >
+          Mobile Login
+        </button>
+        <button
+          type="button"
+          className={method==="roblox"?"active":""}
+          onClick={()=>switchMethod("roblox")}
+        >
+          Roblox About
+        </button>
+      </div>
 
-            <button className="primary-btn" disabled={loading||checking}>
-              {loading?"Checking...":"Staff Login"}
-              <ArrowRight size={15}/>
-            </button>
-          </form>
-        : <div className="verify-panel">
-            <div className="verify-user">
-              <img src={challenge.user.avatar} alt=""/>
-              <div>
-                <strong>{challenge.user.displayName}</strong>
-                <span>@{challenge.user.username}</span>
-              </div>
-            </div>
+      {method==="mobile"&&
+        <div className="mobile-login-panel">
+          {!mobileChallenge
+            ? <form className="login-form" onSubmit={startMobile}>
+                <label>
+                  <span>Roblox username</span>
+                  <input
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    value={username}
+                    onChange={event=>setUsername(event.target.value)}
+                    placeholder="Your Roblox username"
+                  />
+                </label>
 
-            <p>
-              Put this code anywhere in your Roblox <strong>About</strong> section:
-            </p>
+                <p className="mobile-login-help">
+                  We’ll DM a one-time code to the Discord account linked to this Roblox account.
+                </p>
 
-            <div className="verification-code">{challenge.code}</div>
+                <button className="primary-btn" disabled={loading||checking}>
+                  {loading?"Sending...":"Send Discord Code"}
+                  <MessageCircleMore size={15}/>
+                </button>
+              </form>
+            : <form className="mobile-code-form" onSubmit={verifyMobile}>
+                <div className="verify-user">
+                  <img src={mobileChallenge.user.avatar} alt=""/>
+                  <div>
+                    <strong>{mobileChallenge.user.displayName}</strong>
+                    <span>@{mobileChallenge.user.username} • {mobileChallenge.user.roleName}</span>
+                  </div>
+                </div>
 
-            <div className="button-row">
-              <a
-                className="secondary-btn"
-                href={challenge.profileUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Open Roblox<ExternalLink size={14}/>
-              </a>
+                <div className="mobile-code-sent">
+                  Code sent to <strong>{mobileChallenge.discordHint||"your linked Discord"}</strong>.
+                </div>
 
-              <button className="primary-btn" onClick={verify} disabled={loading}>
-                {loading?"Verifying...":"Verify"}
-                <CheckCircle2 size={15}/>
-              </button>
-            </div>
+                <label>
+                  <span>6-digit code</span>
+                  <input
+                    className="mobile-code-input"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    value={mobileCode}
+                    onChange={event=>setMobileCode(event.target.value.replace(/\D/g,"").slice(0,6))}
+                    placeholder="000000"
+                    autoFocus
+                  />
+                </label>
+
+                <button className="primary-btn" disabled={loading}>
+                  {loading?"Signing in...":"Sign In"}
+                  <ArrowRight size={15}/>
+                </button>
+
+                <button
+                  type="button"
+                  className="login-link-button"
+                  onClick={()=>{setMobileChallenge(null);setMobileCode("");setMessage("");}}
+                >
+                  Send a new code
+                </button>
+              </form>
+          }
+
+          <div className="mobile-login-note">
+            <strong>First time?</strong>
+            <span>
+              Your Discord account has to be linked first. If it isn't linked yet, use Roblox About once, then link Discord from Connections. After that, Mobile Login works without editing your Roblox profile.
+            </span>
           </div>
+        </div>
+      }
+
+      {method==="roblox"&&
+        <>
+          {!challenge
+            ? <form className="login-form" onSubmit={startRoblox}>
+                <label>
+                  <span>Roblox username</span>
+                  <input
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    value={username}
+                    onChange={event=>setUsername(event.target.value)}
+                    placeholder="Your Roblox username"
+                  />
+                </label>
+
+                <button className="primary-btn" disabled={loading||checking}>
+                  {loading?"Checking...":"Continue"}
+                  <ArrowRight size={15}/>
+                </button>
+              </form>
+            : <div className="verify-panel">
+                <div className="verify-user">
+                  <img src={challenge.user.avatar} alt=""/>
+                  <div>
+                    <strong>{challenge.user.displayName}</strong>
+                    <span>@{challenge.user.username}</span>
+                  </div>
+                </div>
+
+                <p>
+                  Put this code anywhere in your Roblox <strong>About</strong> section:
+                </p>
+
+                <div className="verification-code">{challenge.code}</div>
+
+                <div className="button-row">
+                  <a
+                    className="secondary-btn"
+                    href={challenge.profileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open Roblox<ExternalLink size={14}/>
+                  </a>
+
+                  <button className="primary-btn" onClick={verifyRoblox} disabled={loading}>
+                    {loading?"Verifying...":"Verify"}
+                    <CheckCircle2 size={15}/>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  className="login-link-button"
+                  onClick={()=>{setChallenge(null);setMessage("");}}
+                >
+                  Use a different account
+                </button>
+              </div>
+          }
+        </>
       }
 
       {message&&<div className="login-message">{message}</div>}
 
-      <div className="community-entry-divider">
-        <span>OR</span>
-      </div>
+      <div className="community-entry-divider"><span>or</span></div>
 
-      <button
-        type="button"
-        className="community-entry-btn"
-        onClick={onCommunity}
-      >
+      <button type="button" className="community-entry-btn" onClick={onCommunity}>
         <Users size={16}/>
         <div>
-          <strong>Not a staff member?</strong>
-          <span>Click here to enter the Bay Café community.</span>
+          <strong>Open the community site</strong>
+          <span>No staff login required.</span>
         </div>
         <ChevronRight size={15}/>
       </button>
@@ -490,6 +651,7 @@ function Login({onLogin,checking,onCommunity}){
     </section>
   </main>;
 }
+
 const Badge=({children,tone="aqua"})=><span className={`badge ${tone}`}>{children}</span>;
 function SectionHead({kicker,title,text,right}){return <div className="section-head"><div><span className="eyebrow">{kicker}</span><h2>{title}</h2>{text&&<p>{text}</p>}</div>{right}</div>;}
 function Empty({icon:Icon,title,text}){return <div className="empty-state"><div className="empty-icon"><Icon size={20}/></div><strong>{title}</strong><p>{text}</p></div>;}
