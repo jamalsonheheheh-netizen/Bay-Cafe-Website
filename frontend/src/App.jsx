@@ -353,7 +353,6 @@ function Login({onLogin,checking,onCommunity}){
   const[robloxUsername,setRobloxUsername]=useState("");
   const[challenge,setChallenge]=useState(null);
   const[mobileChallenge,setMobileChallenge]=useState(null);
-  const[mobileCode,setMobileCode]=useState("");
   const[loading,setLoading]=useState(false);
   const[message,setMessage]=useState("");
 
@@ -361,7 +360,6 @@ function Login({onLogin,checking,onCommunity}){
     setMethod(next);
     setChallenge(null);
     setMobileChallenge(null);
-    setMobileCode("");
     setMessage("");
   };
 
@@ -394,35 +392,6 @@ function Login({onLogin,checking,onCommunity}){
     }
   };
 
-  const verifyDiscord=async event=>{
-    event?.preventDefault();
-
-    if(mobileCode.replace(/\D/g,"").length!==6){
-      return setMessage("Enter the 6-digit code from the Bay Café bot.");
-    }
-
-    setLoading(true);
-    setMessage("");
-
-    try{
-      const result=await api(
-        "/api/auth/mobile/verify",
-        {
-          method:"POST",
-          body:JSON.stringify({
-            challengeId:mobileChallenge.challengeId,
-            code:mobileCode
-          })
-        }
-      );
-
-      onLogin(result.token,result.user);
-    }catch(error){
-      setMessage(error.message);
-    }finally{
-      setLoading(false);
-    }
-  };
 
   const startRoblox=async event=>{
     event?.preventDefault();
@@ -535,15 +504,15 @@ function Login({onLogin,checking,onCommunity}){
                   </label>
 
                   <p className="staff-login-help">
-                    We find you in the main server, use your linked Roblox account, and DM you a one-time code.
+                    Enter the Discord username you use in the main Bay Café server. We’ll match it to your linked Roblox account.
                   </p>
 
                   <button className="primary-btn" disabled={loading||checking}>
-                    {loading?"Finding account…":"Continue"}
+                    {loading?"Finding account…":"Send Sign-In Link"}
                     <ArrowRight size={15}/>
                   </button>
                 </form>
-              : <form className="staff-login-form" onSubmit={verifyDiscord}>
+              : <div className="staff-login-form">
                   <div className="linked-login-card">
                     <div className="linked-login-row">
                       <img src={mobileChallenge.discordUser?.avatar} alt=""/>
@@ -566,41 +535,25 @@ function Login({onLogin,checking,onCommunity}){
                     </div>
                   </div>
 
-                  <p className="staff-login-help">
-                    A 6-digit code was sent to your Discord DMs.
-                  </p>
-
-                  <label>
-                    <span>Login code</span>
-                    <input
-                      className="mobile-code-input"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      value={mobileCode}
-                      onChange={event=>setMobileCode(event.target.value.replace(/\D/g,"").slice(0,6))}
-                      placeholder="000000"
-                      autoFocus
-                    />
-                  </label>
-
-                  <button className="primary-btn" disabled={loading}>
-                    {loading?"Signing in…":"Enter Staff Hub"}
-                    <ArrowRight size={15}/>
-                  </button>
+                  <div className="magic-link-sent">
+                    <MessageCircleMore size={18}/>
+                    <div>
+                      <strong>Check your Discord DMs</strong>
+                      <span>Tap “Open Staff Hub” in the message from the Bay Café bot. No code copying needed.</span>
+                    </div>
+                  </div>
 
                   <button
                     type="button"
                     className="login-link-button"
                     onClick={()=>{
                       setMobileChallenge(null);
-                      setMobileCode("");
                       setMessage("");
                     }}
                   >
-                    Use another Discord account
+                    Send another sign-in link
                   </button>
-                </form>
+                </div>
             }
           </>
         }
@@ -3303,8 +3256,57 @@ export default function App(){
   const[staffTransition,setStaffTransition]=useState(false);
   const[staffLoginEntrance,setStaffLoginEntrance]=useState(false);
   const[transitionUser,setTransitionUser]=useState(null);
+  const[magicLoginStatus,setMagicLoginStatus]=useState(null);
 
   useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    const challengeId=params.get("bay_staff_login");
+    const key=params.get("key");
+
+    if(!challengeId||!key)return;
+
+    let cancelled=false;
+    setShowIntro(false);
+    setCommunityOpen(false);
+    setMagicLoginStatus("Signing you in…");
+
+    // Remove the secret from the address bar immediately. The values are still
+    // held in memory for this redemption request.
+    window.history.replaceState({},document.title,window.location.pathname);
+
+    api(
+      "/api/auth/mobile/redeem",
+      {
+        method:"POST",
+        body:JSON.stringify({challengeId,key})
+      }
+    )
+      .then(result=>{
+        if(cancelled)return;
+
+        session.login(result.token,result.user);
+        setTransitionUser(result.user);
+        setMagicLoginStatus(null);
+        setStaffTransition(true);
+
+        setTimeout(()=>{
+          setStaffTransition(false);
+          setCommunityOpen(false);
+        },1250);
+      })
+      .catch(error=>{
+        if(cancelled)return;
+        setMagicLoginStatus(error.message||"That sign-in link could not be used.");
+        setCommunityOpen(true);
+      });
+
+    return()=>{cancelled=true};
+  },[]);
+
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    if(params.get("bay_staff_login"))return;
+
     const timer=setTimeout(()=>setShowIntro(false),2900);
     return()=>clearTimeout(timer);
   },[]);
@@ -3345,6 +3347,16 @@ export default function App(){
     // the Community page without signing in again.
     setCommunityOpen(true);
   };
+
+  if(magicLoginStatus){
+    return <main className="magic-login-screen">
+      <div className="magic-login-card">
+        <Waves size={24}/>
+        <strong>{magicLoginStatus}</strong>
+        <span>Bay Café Staff Hub</span>
+      </div>
+    </main>;
+  }
 
   if(showIntro){
     return <SiteIntro/>;
