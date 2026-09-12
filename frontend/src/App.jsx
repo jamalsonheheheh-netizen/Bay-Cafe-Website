@@ -363,6 +363,46 @@ function Login({onLogin,checking,onCommunity}){
     setMessage("");
   };
 
+  useEffect(()=>{
+    if(method!=="discord"||!mobileChallenge?.challengeId)return;
+
+    let cancelled=false;
+
+    const check=async()=>{
+      try{
+        const result=await api(
+          "/api/auth/mobile/status",
+          {
+            method:"POST",
+            body:JSON.stringify({
+              challengeId:mobileChallenge.challengeId
+            })
+          }
+        );
+
+        if(cancelled)return;
+
+        if(result.authenticated&&result.token&&result.user){
+          onLogin(result.token,result.user);
+        }
+      }catch(error){
+        if(cancelled)return;
+        if(String(error.message||"").toLowerCase().includes("expired")){
+          setMobileChallenge(null);
+          setMessage("That login request expired. Enter your Discord username again.");
+        }
+      }
+    };
+
+    check();
+    const interval=setInterval(check,2200);
+
+    return()=>{
+      cancelled=true;
+      clearInterval(interval);
+    };
+  },[method,mobileChallenge?.challengeId]);
+
   const startDiscord=async event=>{
     event?.preventDefault();
 
@@ -383,6 +423,11 @@ function Login({onLogin,checking,onCommunity}){
           })
         }
       );
+
+      if(result.authenticated&&result.token&&result.user){
+        onLogin(result.token,result.user);
+        return;
+      }
 
       setMobileChallenge(result);
     }catch(error){
@@ -508,7 +553,7 @@ function Login({onLogin,checking,onCommunity}){
                   </p>
 
                   <button className="primary-btn" disabled={loading||checking}>
-                    {loading?"Finding account…":"Send Sign-In Link"}
+                    {loading?"Finding account…":"Continue"}
                     <ArrowRight size={15}/>
                   </button>
                 </form>
@@ -535,12 +580,16 @@ function Login({onLogin,checking,onCommunity}){
                     </div>
                   </div>
 
-                  <div className="magic-link-sent">
+                  <div className="discord-approve-box">
                     <MessageCircleMore size={18}/>
                     <div>
-                      <strong>Check your Discord DMs</strong>
-                      <span>Tap “Open Staff Hub” in the message from the Bay Café bot. No code copying needed.</span>
+                      <strong>Approve it in the main server</strong>
+                      <span>Go back to Discord and send <b>,login</b> in the Bay Café main server. Then return here.</span>
                     </div>
+                  </div>
+
+                  <div className="discord-mobile-note">
+                    If Discord closes this page, that's okay. Reopen the website, press Staff Login, and enter the same Discord username again. Your approval is saved on the server for 10 minutes.
                   </div>
 
                   <button
@@ -551,7 +600,7 @@ function Login({onLogin,checking,onCommunity}){
                       setMessage("");
                     }}
                   >
-                    Send another sign-in link
+                    Use another Discord account
                   </button>
                 </div>
             }
@@ -638,6 +687,12 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
   const[careers,setCareers]=useState([]);
   const[birthdays,setBirthdays]=useState([]);
   const[todayBirthdays,setTodayBirthdays]=useState([]);
+  const[birthdayForm,setBirthdayForm]=useState({name:"",username:"",date:"",note:""});
+  const[birthdaySaving,setBirthdaySaving]=useState(false);
+  const[birthdayMessage,setBirthdayMessage]=useState("");
+  const[supportForm,setSupportForm]=useState({name:"",robloxUsername:"",discordUsername:"",type:"General Support",subject:"",details:""});
+  const[supportSaving,setSupportSaving]=useState(false);
+  const[supportMessage,setSupportMessage]=useState("");
 
   const loadAnnouncements=async()=>{
     const result=await api("/api/announcements");
@@ -652,6 +707,68 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
     const result=await api("/api/birthdays");
     setBirthdays(result.birthdays||[]);
     setTodayBirthdays(result.todayBirthdays||[]);
+  };
+
+  const submitBirthday=async event=>{
+    event.preventDefault();
+    setBirthdaySaving(true);
+    setBirthdayMessage("");
+
+    try{
+      const result=await api(
+        "/api/birthdays/self",
+        {
+          method:"POST",
+          body:JSON.stringify({
+            ...birthdayForm,
+            date:birthdayForm.date.slice(5)
+          })
+        }
+      );
+
+      setBirthdayMessage(
+        result.updated
+          ?"Your birthday was updated."
+          :"Your birthday was added."
+      );
+
+      setBirthdayForm({name:"",username:"",date:"",note:""});
+      await loadBirthdays();
+    }catch(error){
+      setBirthdayMessage(error.message);
+    }finally{
+      setBirthdaySaving(false);
+    }
+  };
+
+  const submitCommunitySupport=async event=>{
+    event.preventDefault();
+    setSupportSaving(true);
+    setSupportMessage("");
+
+    try{
+      const result=await api(
+        "/api/community/support",
+        {
+          method:"POST",
+          body:JSON.stringify(supportForm)
+        }
+      );
+
+      setSupportMessage(result.message||"Your support request was sent.");
+      setSupportForm({
+        name:"",
+        robloxUsername:"",
+        discordUsername:"",
+        type:"General Support",
+        subject:"",
+        details:""
+      });
+    }catch(error){
+      setSupportMessage(error.message);
+    }finally{
+      setSupportSaving(false);
+    }
   };
 
   useEffect(()=>{
@@ -673,6 +790,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
     {id:"announcements",label:"Announcements",icon:Megaphone},
     {id:"careers",label:"Careers",icon:BriefcaseBusiness},
     {id:"birthdays",label:"Birthdays",icon:Cake},
+    {id:"support",label:"Support",icon:LifeBuoy},
     {id:"about",label:"About Bay Café",icon:Coffee}
   ];
 
@@ -727,7 +845,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
             <div className="community-hero-copy">
               <span className="home-label">Bay Café</span>
               <h1>Welcome to Bay Café.</h1>
-              <p>Everything Bay Café in one place | announcements, careers, birthdays, and community information.</p>
+              <p>Everything Bay Café in one place — announcements, careers, birthdays, and community information.</p>
               <div className="button-row">
                 <button className="primary-btn" onClick={()=>setPage("careers")}>View Careers<ChevronRight size={15}/></button>
                 <button className="secondary-btn" onClick={()=>setPage("announcements")}>Announcements<Megaphone size={14}/></button>
@@ -759,6 +877,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
             <article className="community-feature-card feature-careers"><img src={careersArt} alt="Careers"/><div className="community-feature-content"><BriefcaseBusiness size={18}/><span className="card-kicker">Careers</span><h3>Want to work with us?</h3><p>See what positions are open and apply when you're ready.</p><button onClick={()=>setPage("careers")}>Explore Careers<ChevronRight size={13}/></button></div></article>
             <article className="community-feature-card feature-community"><img src={communityArt} alt="Community"/><div className="community-feature-content"><Megaphone size={18}/><span className="card-kicker">Updates</span><h3>See what's happening.</h3><p>Announcements, changes, events, and anything else you should know.</p><button onClick={()=>setPage("announcements")}>View Updates<ChevronRight size={13}/></button></div></article>
             <article className="community-feature-card feature-birthday"><img src={sunsetArt} alt="Sunset"/><div className="community-feature-content"><Cake size={18}/><span className="card-kicker">Birthdays</span><h3>Who's celebrating?</h3><p>Take a look at upcoming birthdays around the community.</p><button onClick={()=>setPage("birthdays")}>View Birthdays<ChevronRight size={13}/></button></div></article>
+            <article className="community-feature-card feature-support"><div className="community-feature-content"><LifeBuoy size={18}/><span className="card-kicker">Support</span><h3>Need help?</h3><p>Send a support request directly to the Bay Café Support Team.</p><button onClick={()=>setPage("support")}>Open Support<ChevronRight size={13}/></button></div></article>
           </section>
 
           <section className="community-color-banner community-update-banner">
@@ -884,19 +1003,207 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
 
       {page==="birthdays"&&
         <div className="page-stack">
-          <SectionHead kicker="COMMUNITY CELEBRATIONS" title="Birthdays at the Bay." text="Celebrate members of the Bay Café community." right={<Badge tone="green">{birthdays.length} LISTED</Badge>}/>
+          <SectionHead
+            kicker="COMMUNITY CELEBRATIONS"
+            title="Birthdays at the Bay."
+            text="Add your birthday and we'll celebrate it on the Community page when the day comes."
+            right={<Badge tone="green">{birthdays.length} LISTED</Badge>}
+          />
+
           {todayBirthdays.length>0&&
             <section className="birthday-announcement large">
               <div className="birthday-icon"><Gift size={26}/></div>
-              <div><span className="eyebrow">BIRTHDAYS TODAY</span><h2>{todayBirthdays.map(item=>item.name).join(", ")}</h2><p>Wish them a happy birthday when you see them around the Bay! 🎂</p></div>
+              <div>
+                <span className="eyebrow">BIRTHDAYS TODAY</span>
+                <h2>{todayBirthdays.map(item=>item.name).join(", ")}</h2>
+                <p>Wish them a happy birthday when you see them around the Bay! 🎂</p>
+              </div>
             </section>
           }
+
+          <form className="community-birthday-form" onSubmit={submitBirthday}>
+            <div className="community-birthday-form-copy">
+              <Cake size={20}/>
+              <div>
+                <h3>Put in your birthday</h3>
+                <p>We only save the month and day — not your birth year.</p>
+              </div>
+            </div>
+
+            <div className="community-birthday-fields">
+              <label>
+                <span>Name</span>
+                <input
+                  value={birthdayForm.name}
+                  onChange={event=>setBirthdayForm({...birthdayForm,name:event.target.value})}
+                  placeholder="What should we call you?"
+                  required
+                />
+              </label>
+
+              <label>
+                <span>Roblox username</span>
+                <input
+                  value={birthdayForm.username}
+                  onChange={event=>setBirthdayForm({...birthdayForm,username:event.target.value})}
+                  placeholder="Your Roblox username"
+                  required
+                />
+              </label>
+
+              <label>
+                <span>Birthday</span>
+                <input
+                  type="date"
+                  value={birthdayForm.date}
+                  onChange={event=>setBirthdayForm({...birthdayForm,date:event.target.value})}
+                  required
+                />
+              </label>
+
+              <label>
+                <span>Optional note</span>
+                <input
+                  value={birthdayForm.note}
+                  onChange={event=>setBirthdayForm({...birthdayForm,note:event.target.value})}
+                  placeholder="Anything you want shown with it"
+                />
+              </label>
+            </div>
+
+            <button className="primary-btn" disabled={birthdaySaving}>
+              {birthdaySaving?"Saving...":"Add My Birthday"}
+              <Cake size={14}/>
+            </button>
+
+            {birthdayMessage&&
+              <div className="community-form-message">{birthdayMessage}</div>
+            }
+          </form>
+
           <div className="birthday-grid">
             {birthdays.length
-              ? birthdays.map(item=><article className="birthday-card" key={item.id}><div className="birthday-date"><Cake size={17}/><strong>{item.date}</strong></div><h3>{item.name}</h3>{item.username&&<span>@{item.username}</span>}{item.note&&<p>{item.note}</p>}</article>)
-              : <Empty icon={Cake} title="No birthdays listed yet" text="Leadership and Ownership can add community birthdays from the staff hub."/>
+              ? birthdays.map(item=>
+                  <article className="birthday-card" key={item.id}>
+                    <div className="birthday-date">
+                      <Cake size={17}/>
+                      <strong>{item.date}</strong>
+                    </div>
+                    <h3>{item.name}</h3>
+                    {item.username&&<span>@{item.username}</span>}
+                    {item.note&&<p>{item.note}</p>}
+                  </article>
+                )
+              : <Empty
+                  icon={Cake}
+                  title="No birthdays listed yet"
+                  text="Be the first person to add yours."
+                />
             }
           </div>
+        </div>
+      }
+
+      {page==="support"&&
+        <div className="page-stack">
+          <SectionHead
+            kicker="COMMUNITY SUPPORT"
+            title="Need help?"
+            text="Send a request directly to the Bay Café Support Team. You don't need to sign into the Staff Hub."
+          />
+
+          <section className="community-support-layout">
+            <div className="community-support-intro">
+              <LifeBuoy size={24}/>
+              <h3>Bay Café Support</h3>
+              <p>
+                Use this for general help, player reports, partnership questions, staffing questions,
+                or anything else you need the team to look at.
+              </p>
+              <div className="community-support-contact-note">
+                <strong>Keep your Discord username accurate.</strong>
+                <span>Support may contact you there after reviewing your request.</span>
+              </div>
+            </div>
+
+            <form className="community-support-form" onSubmit={submitCommunitySupport}>
+              <div className="community-support-grid">
+                <label>
+                  <span>Name</span>
+                  <input
+                    value={supportForm.name}
+                    onChange={event=>setSupportForm({...supportForm,name:event.target.value})}
+                    placeholder="Your name"
+                    required
+                  />
+                </label>
+
+                <label>
+                  <span>Discord username</span>
+                  <input
+                    value={supportForm.discordUsername}
+                    onChange={event=>setSupportForm({...supportForm,discordUsername:event.target.value})}
+                    placeholder="example"
+                    required
+                  />
+                </label>
+
+                <label>
+                  <span>Roblox username</span>
+                  <input
+                    value={supportForm.robloxUsername}
+                    onChange={event=>setSupportForm({...supportForm,robloxUsername:event.target.value})}
+                    placeholder="Optional"
+                  />
+                </label>
+
+                <label>
+                  <span>Type</span>
+                  <select
+                    value={supportForm.type}
+                    onChange={event=>setSupportForm({...supportForm,type:event.target.value})}
+                  >
+                    <option>General Support</option>
+                    <option>Player Report</option>
+                    <option>Partnership Question</option>
+                    <option>Staffing Question</option>
+                    <option>Ban Appeal</option>
+                    <option>Other</option>
+                  </select>
+                </label>
+              </div>
+
+              <label>
+                <span>Subject</span>
+                <input
+                  value={supportForm.subject}
+                  onChange={event=>setSupportForm({...supportForm,subject:event.target.value})}
+                  placeholder="What do you need help with?"
+                  required
+                />
+              </label>
+
+              <label>
+                <span>Message</span>
+                <textarea
+                  rows="6"
+                  value={supportForm.details}
+                  onChange={event=>setSupportForm({...supportForm,details:event.target.value})}
+                  placeholder="Tell us what happened or what you need help with."
+                  required
+                />
+              </label>
+
+              <button className="primary-btn" disabled={supportSaving}>
+                {supportSaving?"Sending...":"Send Support Request"}
+                <LifeBuoy size={14}/>
+              </button>
+
+              {supportMessage&&
+                <div className="community-form-message">{supportMessage}</div>
+              }
+            </form>
+          </section>
         </div>
       }
 
@@ -3256,57 +3563,8 @@ export default function App(){
   const[staffTransition,setStaffTransition]=useState(false);
   const[staffLoginEntrance,setStaffLoginEntrance]=useState(false);
   const[transitionUser,setTransitionUser]=useState(null);
-  const[magicLoginStatus,setMagicLoginStatus]=useState(null);
 
   useEffect(()=>{
-    const params=new URLSearchParams(window.location.search);
-    const challengeId=params.get("bay_staff_login");
-    const key=params.get("key");
-
-    if(!challengeId||!key)return;
-
-    let cancelled=false;
-    setShowIntro(false);
-    setCommunityOpen(false);
-    setMagicLoginStatus("Signing you in…");
-
-    // Remove the secret from the address bar immediately. The values are still
-    // held in memory for this redemption request.
-    window.history.replaceState({},document.title,window.location.pathname);
-
-    api(
-      "/api/auth/mobile/redeem",
-      {
-        method:"POST",
-        body:JSON.stringify({challengeId,key})
-      }
-    )
-      .then(result=>{
-        if(cancelled)return;
-
-        session.login(result.token,result.user);
-        setTransitionUser(result.user);
-        setMagicLoginStatus(null);
-        setStaffTransition(true);
-
-        setTimeout(()=>{
-          setStaffTransition(false);
-          setCommunityOpen(false);
-        },1250);
-      })
-      .catch(error=>{
-        if(cancelled)return;
-        setMagicLoginStatus(error.message||"That sign-in link could not be used.");
-        setCommunityOpen(true);
-      });
-
-    return()=>{cancelled=true};
-  },[]);
-
-  useEffect(()=>{
-    const params=new URLSearchParams(window.location.search);
-    if(params.get("bay_staff_login"))return;
-
     const timer=setTimeout(()=>setShowIntro(false),2900);
     return()=>clearTimeout(timer);
   },[]);
@@ -3347,16 +3605,6 @@ export default function App(){
     // the Community page without signing in again.
     setCommunityOpen(true);
   };
-
-  if(magicLoginStatus){
-    return <main className="magic-login-screen">
-      <div className="magic-login-card">
-        <Waves size={24}/>
-        <strong>{magicLoginStatus}</strong>
-        <span>Bay Café Staff Hub</span>
-      </div>
-    </main>;
-  }
 
   if(showIntro){
     return <SiteIntro/>;

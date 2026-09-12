@@ -665,47 +665,29 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
       req.body.discordUsername||
       req.body.username||
       ""
-    ).trim();
+    ).replace(/^@/,"").trim();
 
     if(!discordUsername){
-      return res.status(400).json({
-        success:false,
-        message:"Enter your Discord username."
-      });
+      return res.status(400).json({success:false,message:"Enter your Discord username."});
     }
 
     if(!discordClient?.isReady()){
-      return res.status(503).json({
-        success:false,
-        message:"The Bay Café Discord bot is offline right now. Try again in a moment."
-      });
+      return res.status(503).json({success:false,message:"The Bay Café Discord bot is offline right now."});
     }
 
     const guild=await trackedGuild();
     if(!guild){
-      return res.status(503).json({
-        success:false,
-        message:"The Bay Café main server is unavailable right now."
-      });
+      return res.status(503).json({success:false,message:"The Bay Café main server is unavailable right now."});
     }
 
-    const rawQuery=discordUsername.replace(/^@/,"").trim();
-    const query=rawQuery.toLowerCase();
-
-    const fetched=await guild.members.fetch({
-      query:rawQuery,
-      limit:100
-    }).catch(()=>null);
-
-    const candidates=fetched
-      ? [...fetched.values()]
-      : [...guild.members.cache.values()];
+    const query=discordUsername.toLowerCase();
+    const fetched=await guild.members.fetch({query:discordUsername,limit:100}).catch(()=>null);
+    const candidates=fetched?[...fetched.values()]:[...guild.members.cache.values()];
 
     const matches=candidates.filter(member=>{
       const username=String(member.user?.username||"").toLowerCase();
       const globalName=String(member.user?.globalName||"").toLowerCase();
       const displayName=String(member.displayName||"").toLowerCase();
-
       return username===query||globalName===query||displayName===query;
     });
 
@@ -745,74 +727,66 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
     const user=await buildWebsiteUser(robloxUsername,{allowGuest:false});
 
     if(!isStaffAccess(user)){
-      return res.status(403).json({
-        success:false,
-        message:"Staff access begins at Directing Team."
+      return res.status(403).json({success:false,message:"Staff access begins at Directing Team."});
+    }
+
+    // If this Discord account already approved a login in the last 10 minutes,
+    // let this browser finish signing in now. This is what makes the flow work
+    // even when Discord's in-app browser was closed.
+    const approved=[...mobileLoginChallenges.entries()]
+      .filter(([,item])=>
+        item&&
+        item.approved===true&&
+        String(item.discordId)===String(discordMember.id)&&
+        String(item.userId)===String(user.id)&&
+        Number(item.expiresAt||0)>Date.now()
+      )
+      .sort((a,b)=>Number(b[1].approvedAt||0)-Number(a[1].approvedAt||0))[0];
+
+    if(approved){
+      const [challengeId]=approved;
+      user.accessMode="staff";
+      const token=createSessionToken(user);
+      mobileLoginChallenges.delete(challengeId);
+
+      return res.json({
+        success:true,
+        authenticated:true,
+        token,
+        user,
+        persistent:true,
+        idleTimeoutDays:7
       });
     }
 
-    const challengeId=crypto.randomUUID();
-    const secret=crypto.randomBytes(24).toString("base64url");
-    const expiresAt=Date.now()+10*60*1000;
+    // Reuse an existing pending request instead of creating duplicates.
+    const pending=[...mobileLoginChallenges.entries()]
+      .find(([,item])=>
+        item&&
+        item.approved!==true&&
+        String(item.discordId)===String(discordMember.id)&&
+        String(item.userId)===String(user.id)&&
+        Number(item.expiresAt||0)>Date.now()
+      );
 
-    mobileLoginChallenges.set(challengeId,{
-      userId:String(user.id),
-      username:user.username,
-      discordId:String(discordMember.id),
-      secretHash:sign(`magic:${challengeId}:${secret}`),
-      expiresAt,
-      attempts:0
-    });
+    const challengeId=pending?.[0]||crypto.randomUUID();
 
-    const publicFrontend=String(
-      process.env.FRONTEND_URL||
-      String(ALLOWED_ORIGINS[0]||"https://bay-cafe.up.railway.app")
-    ).replace(/\/$/,"");
-
-    const magicUrl=
-      `${publicFrontend}/?bay_staff_login=${encodeURIComponent(challengeId)}`+
-      `&key=${encodeURIComponent(secret)}`;
-
-    try{
-      await discordMember.user.send({
-        embeds:[
-          new EmbedBuilder()
-            .setColor(0x62c9c6)
-            .setTitle("Bay Café Staff Login")
-            .setDescription(
-              `Tap the button below to sign in as **${user.username}**.\n\nThe link expires in **10 minutes** and can only be used once. If you did not request this, ignore it.`
-            )
-            .setFooter({text:"Bay Café Staff Hub"})
-            .setTimestamp()
-        ],
-        components:[
-          {
-            type:1,
-            components:[
-              {
-                type:2,
-                style:5,
-                label:"Open Staff Hub",
-                url:magicUrl
-              }
-            ]
-          }
-        ]
-      });
-    }catch(error){
-      mobileLoginChallenges.delete(challengeId);
-
-      return res.status(400).json({
-        success:false,
-        message:"I found your account, but I couldn't DM you. Enable DMs from server members and try again."
+    if(!pending){
+      mobileLoginChallenges.set(challengeId,{
+        userId:String(user.id),
+        username:user.username,
+        discordId:String(discordMember.id),
+        approved:false,
+        approvedAt:null,
+        expiresAt:Date.now()+10*60*1000
       });
     }
 
     res.json({
       success:true,
+      authenticated:false,
       challengeId,
       expiresInSeconds:600,
-      method:"magic-link",
       discordUser:{
         id:String(discordMember.id),
         username:discordMember.user.username,
@@ -835,63 +809,57 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
   }
 });
 
-app.post("/api/auth/mobile/redeem",async(req,res)=>{
+app.post("/api/auth/mobile/status",async(req,res)=>{
   try{
     cleanupMobileLoginChallenges();
 
     const challengeId=String(req.body.challengeId||"");
-    const secret=String(req.body.key||"");
     const challenge=mobileLoginChallenges.get(challengeId);
 
     if(!challenge||challenge.expiresAt<=Date.now()){
       mobileLoginChallenges.delete(challengeId);
       return res.status(400).json({
         success:false,
-        message:"That sign-in link expired. Request a new one from Staff Login."
+        expired:true,
+        message:"That login request expired. Start again."
       });
     }
 
-    challenge.attempts=Number(challenge.attempts||0)+1;
-    if(challenge.attempts>8){
-      mobileLoginChallenges.delete(challengeId);
-      return res.status(429).json({
-        success:false,
-        message:"That sign-in link can no longer be used. Request a new one."
-      });
-    }
-
-    if(!secret||!safeSignatureMatches(`magic:${challengeId}:${secret}`,challenge.secretHash)){
-      return res.status(401).json({
-        success:false,
-        message:"That sign-in link is invalid."
+    if(!challenge.approved){
+      return res.json({
+        success:true,
+        authenticated:false,
+        approved:false,
+        expiresAt:challenge.expiresAt
       });
     }
 
     const link=discordLinkForDiscordId(challenge.discordId);
     if(!link||String(link.robloxId)!==String(challenge.userId)){
+      mobileLoginChallenges.delete(challengeId);
       return res.status(403).json({
         success:false,
-        message:"Your Discord ↔ Roblox link changed. Request a new sign-in link."
+        message:"Your Discord ↔ Roblox link changed. Start again."
       });
     }
 
     const user=await buildWebsiteUser(challenge.username,{allowGuest:false});
-
     if(String(user.id)!==String(challenge.userId)||!isStaffAccess(user)){
+      mobileLoginChallenges.delete(challengeId);
       return res.status(403).json({
         success:false,
-        message:"Your Bay Café staff access changed. Request a new sign-in link."
+        message:"Your Bay Café staff access changed. Start again."
       });
     }
 
     user.accessMode="staff";
     const token=createSessionToken(user);
-
-    // Consume ONLY after the session was successfully created.
     mobileLoginChallenges.delete(challengeId);
 
     res.json({
       success:true,
+      authenticated:true,
+      approved:true,
       token,
       user,
       persistent:true,
@@ -900,7 +868,7 @@ app.post("/api/auth/mobile/redeem",async(req,res)=>{
   }catch(error){
     res.status(400).json({
       success:false,
-      message:error.message||"Unable to finish Discord sign in."
+      message:error.message||"Unable to check Discord login."
     });
   }
 });
@@ -3270,6 +3238,49 @@ app.get("/api/birthdays",(_req,res)=>{
     birthdays:birthdays.map(publicBirthday)
   });
 });
+
+app.post("/api/birthdays/self",(req,res)=>{
+  const name=String(req.body.name||"").trim().slice(0,80);
+  const username=String(req.body.username||"").replace(/^@/,"").trim().slice(0,80);
+  const date=normalizeBirthdayDate(req.body.date);
+  const note=String(req.body.note||"").trim().slice(0,160);
+
+  if(!name)return res.status(400).json({success:false,message:"Enter your display name."});
+  if(!username)return res.status(400).json({success:false,message:"Enter your Roblox username."});
+  if(!date)return res.status(400).json({success:false,message:"Enter a valid birthday."});
+
+  const items=readJson(FILES.birthdays,[]);
+  const matchIndex=items.findIndex(item=>
+    String(item.username||"").trim().toLowerCase()===username.toLowerCase()
+  );
+
+  const now=new Date().toISOString();
+
+  const birthday={
+    id:matchIndex>=0?items[matchIndex].id:crypto.randomUUID(),
+    name,
+    username,
+    date,
+    note,
+    createdAt:matchIndex>=0?(items[matchIndex].createdAt||now):now,
+    createdBy:matchIndex>=0?(items[matchIndex].createdBy||"Community self-entry"):"Community self-entry",
+    updatedAt:now,
+    selfSubmitted:true
+  };
+
+  if(matchIndex>=0)items[matchIndex]=birthday;
+  else items.push(birthday);
+
+  writeJson(FILES.birthdays,items);
+  broadcast("birthday:update",publicBirthday(birthday));
+
+  res.status(matchIndex>=0?200:201).json({
+    success:true,
+    birthday:publicBirthday(birthday),
+    updated:matchIndex>=0
+  });
+});
+
 app.post("/api/birthdays",auth,(req,res)=>{
   if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});
   const name=String(req.body.name||"").trim().slice(0,80);
@@ -3701,6 +3712,131 @@ app.get("/api/application-submissions",auth,(req,res)=>{
 });
 
 function publicTicket(ticket){return {...ticket,messages:Array.isArray(ticket.messages)?ticket.messages:[]};}
+
+const communitySupportRate=new Map();
+
+function communitySupportRateKey(req){
+  return String(
+    req.headers["cf-connecting-ip"]||
+    req.headers["x-forwarded-for"]||
+    req.socket?.remoteAddress||
+    "unknown"
+  ).split(",")[0].trim();
+}
+
+app.post("/api/community/support",async(req,res)=>{
+  try{
+    const rateKey=communitySupportRateKey(req);
+    const last=Number(communitySupportRate.get(rateKey)||0);
+
+    if(Date.now()-last<60_000){
+      return res.status(429).json({
+        success:false,
+        message:"Please wait a minute before opening another support request."
+      });
+    }
+
+    const name=String(req.body.name||"").trim().slice(0,80);
+    const robloxUsername=String(req.body.robloxUsername||"").replace(/^@/,"").trim().slice(0,80);
+    const discordUsername=String(req.body.discordUsername||"").replace(/^@/,"").trim().slice(0,80);
+    const type=String(req.body.type||"General Support").trim().slice(0,50);
+    const subject=String(req.body.subject||"").trim().slice(0,100);
+    const details=String(req.body.details||"").trim().slice(0,1800);
+
+    if(name.length<2)return res.status(400).json({success:false,message:"Enter your name."});
+    if(!discordUsername)return res.status(400).json({success:false,message:"Enter your Discord username so Support can contact you."});
+    if(subject.length<3||details.length<5)return res.status(400).json({success:false,message:"Add a subject and details."});
+
+    const now=new Date().toISOString();
+    const ticket={
+      id:crypto.randomUUID(),
+      userId:`community:${crypto.randomUUID()}`,
+      username:robloxUsername||discordUsername,
+      displayName:name,
+      roleName:"Community",
+      discordUsername,
+      type,
+      subject,
+      status:"open",
+      createdAt:now,
+      updatedAt:now,
+      discordThreadId:"",
+      source:"community",
+      messages:[{
+        id:crypto.randomUUID(),
+        authorType:"user",
+        authorId:"community",
+        authorDisplayName:name,
+        authorUsername:robloxUsername||discordUsername,
+        content:details,
+        createdAt:now
+      }]
+    };
+
+    const channel=await ticketChannel();
+
+    if(channel?.isTextBased()){
+      const fields=[
+        {name:"Submitted by",value:name,inline:true},
+        {name:"Discord",value:`@${discordUsername}`,inline:true},
+        {name:"Type",value:type,inline:true}
+      ];
+
+      if(robloxUsername){
+        fields.push({name:"Roblox",value:`@${robloxUsername}`,inline:true});
+      }
+
+      const sent=await channel.send({
+        content:DISCORD_SUPPORT_ROLE_ID?`<@&${DISCORD_SUPPORT_ROLE_ID}>`:undefined,
+        embeds:[
+          new EmbedBuilder()
+            .setColor(0x38bdf8)
+            .setTitle(`Community Support • ${subject}`)
+            .setDescription(details)
+            .addFields(fields)
+            .setFooter({text:`Ticket ${ticket.id}`})
+            .setTimestamp()
+        ]
+      });
+
+      if(sent?.startThread){
+        const thread=await sent.startThread({
+          name:`community-${discordUsername}-${subject}`
+            .toLowerCase()
+            .replace(/[^a-z0-9-]+/g,"-")
+            .slice(0,90),
+          autoArchiveDuration:1440,
+          reason:`Bay Café community support ${ticket.id}`
+        }).catch(()=>null);
+
+        if(thread){
+          ticket.discordThreadId=thread.id;
+          await thread.send(
+            `Contact this community member on Discord: **@${discordUsername}**${robloxUsername?`\nRoblox: **@${robloxUsername}**`:""}`
+          ).catch(()=>null);
+        }
+      }
+    }
+
+    const items=readJson(FILES.tickets,[]);
+    items.unshift(ticket);
+    writeJson(FILES.tickets,items);
+    broadcast("ticket:update",publicTicket(ticket));
+    communitySupportRate.set(rateKey,Date.now());
+
+    res.status(201).json({
+      success:true,
+      ticketId:ticket.id,
+      message:"Your support request was sent to Bay Café Support."
+    });
+  }catch(error){
+    res.status(400).json({
+      success:false,
+      message:error.message||"Unable to send your support request."
+    });
+  }
+});
+
 app.get("/api/tickets",auth,(req,res)=>{const items=readJson(FILES.tickets,[]);const visible=req.user.capabilities?.ticketAdmin?items:items.filter(t=>String(t.userId)===String(req.user.id));res.json({success:true,tickets:visible.map(publicTicket)});});
 async function ticketChannel(){if(!discordClient?.isReady()||!DISCORD_TICKET_CHANNEL_ID)return null;return discordClient.channels.fetch(DISCORD_TICKET_CHANNEL_ID).catch(()=>null);}
 app.post("/api/tickets",auth,async(req,res)=>{const subject=String(req.body.subject||"").trim().slice(0,100),details=String(req.body.details||"").trim().slice(0,1800),type=String(req.body.type||"General Support").trim().slice(0,50);if(subject.length<3||details.length<5)return res.status(400).json({success:false,message:"Add a subject and details."});const now=new Date().toISOString();const ticket={id:crypto.randomUUID(),userId:req.user.id,username:req.user.username,displayName:req.user.displayName,roleName:req.user.roleName,type,subject,status:"open",createdAt:now,updatedAt:now,discordThreadId:"",messages:[{id:crypto.randomUUID(),authorType:"user",authorId:req.user.id,authorDisplayName:req.user.displayName,authorUsername:req.user.username,content:details,createdAt:now}]};const channel=await ticketChannel();if(channel?.isTextBased()){const sent=await channel.send({content:DISCORD_SUPPORT_ROLE_ID?`<@&${DISCORD_SUPPORT_ROLE_ID}>`:undefined,embeds:[new EmbedBuilder().setColor(0x38bdf8).setTitle(`New Bay Café Website Ticket • ${subject}`).setDescription(details).addFields({name:"Opened by",value:`${req.user.displayName} (@${req.user.username})`,inline:true},{name:"Rank",value:req.user.roleName||"Member",inline:true},{name:"Type",value:type,inline:true}).setFooter({text:`Ticket ${ticket.id}`}).setTimestamp()]});if(sent?.startThread){const thread=await sent.startThread({name:`ticket-${req.user.username}-${subject}`.toLowerCase().replace(/[^a-z0-9-]+/g,"-").slice(0,90),autoArchiveDuration:1440,reason:`Bay Café website ticket ${ticket.id}`}).catch(()=>null);if(thread){ticket.discordThreadId=thread.id;await thread.send("Reply in this thread to communicate with the website ticket.").catch(()=>null);}}}const items=readJson(FILES.tickets,[]);items.unshift(ticket);writeJson(FILES.tickets,items);broadcast("ticket:update",publicTicket(ticket));res.json({success:true,ticket:publicTicket(ticket)});});
@@ -3726,6 +3862,40 @@ async function startDiscord(){if(!DISCORD_BOT_TOKEN){console.warn("[Bay Café] D
         .catch(e=>console.error(`[Bay Café] Scheduled activity sync failed: ${e.message}`));
     },60_000);
   });discordClient.on("messageCreate",async message=>{if(!message.guildId)return;const guild=await trackedGuild();if(guild&&message.guildId!==guild.id)return;
+
+    if(!message.author?.bot&&String(message.content||"").trim().toLowerCase()===",login"){
+      cleanupMobileLoginChallenges();
+
+      const pending=[...mobileLoginChallenges.entries()]
+        .filter(([,item])=>
+          item&&
+          item.approved!==true&&
+          String(item.discordId)===String(message.author.id)&&
+          Number(item.expiresAt||0)>Date.now()
+        )
+        .sort((a,b)=>Number(b[1].expiresAt||0)-Number(a[1].expiresAt||0))[0];
+
+      if(!pending){
+        await message.reply({
+          content:"You don't have a pending Bay Café website login. Open Staff Login on the website first, enter your Discord username, then come back and send `,login`.",
+          allowedMentions:{repliedUser:false}
+        }).catch(()=>{});
+        return;
+      }
+
+      const [challengeId,challenge]=pending;
+      challenge.approved=true;
+      challenge.approvedAt=Date.now();
+      mobileLoginChallenges.set(challengeId,challenge);
+
+      await message.reply({
+        content:"✅ Staff login approved. Go back to the Bay Café website. If the page closed, reopen it and enter the same Discord username again.",
+        allowedMentions:{repliedUser:false}
+      }).catch(()=>{});
+
+      return;
+    }
+
     if(!message.author?.bot&&String(message.content||"").trim().toLowerCase().startsWith(",link ")){
       const code=String(message.content||"").trim().split(/\s+/)[1]?.toUpperCase()||"";
       const state=readLinkState();

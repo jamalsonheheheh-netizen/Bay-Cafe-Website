@@ -4359,3 +4359,208 @@ select:focus{
   color:#789da3;
   font-size:9px;
 }
+
+
+/* V71 — mobile-safe Discord approval login */
+.discord-approve-box{
+  padding:14px;
+  border:1px solid rgba(120,207,202,.16);
+  border-radius:8px;
+  display:flex;
+  align-items:flex-start;
+  gap:11px;
+  background:#061f29;
+}
+
+.discord-approve-box>svg{
+  flex:0 0 auto;
+  margin-top:1px;
+  color:#78cfc9;
+}
+
+.discord-approve-box strong,
+.discord-approve-box span{
+  display:block;
+}
+
+.discord-approve-box strong{
+  color:#e9f8f8;
+  font-size:10px;
+}
+
+.discord-approve-box span{
+  margin-top:4px;
+  color:#789ba1;
+  font-size:9px;
+  line-height:1.55;
+}
+
+.discord-approve-box b{
+  color:#dff7f5;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+
+.discord-mobile-note{
+  padding:10px 12px;
+  border-left:2px solid #4d8b91;
+  color:#789ba1;
+  font-size:8px;
+  line-height:1.55;
+}
+
+
+/* V72 — self-service birthdays + Community Support */
+.community-feature-grid{
+  grid-template-columns:repeat(4,minmax(0,1fr));
+}
+
+.feature-support{
+  min-height:240px;
+  display:flex;
+  align-items:flex-end;
+  background:#0a3541!important;
+}
+
+.community-birthday-form{
+  padding:22px;
+  border:1px solid rgba(205,235,239,.11);
+  border-radius:10px;
+  background:#082a35;
+  display:grid;
+  gap:18px;
+}
+
+.community-birthday-form-copy{
+  display:flex;
+  align-items:flex-start;
+  gap:11px;
+}
+
+.community-birthday-form-copy svg{
+  color:#e6c982;
+}
+
+.community-birthday-form-copy h3{
+  margin:0;
+  font-size:16px;
+}
+
+.community-birthday-form-copy p{
+  margin:5px 0 0;
+  color:#82a2a8;
+  font-size:9px;
+}
+
+.community-birthday-fields,
+.community-support-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+
+.community-birthday-form label,
+.community-support-form label{
+  display:grid;
+  gap:7px;
+}
+
+.community-birthday-form label>span,
+.community-support-form label>span{
+  color:#9db9bd;
+  font-size:9px;
+}
+
+.community-birthday-form input,
+.community-support-form input,
+.community-support-form select,
+.community-support-form textarea{
+  width:100%;
+}
+
+.community-form-message{
+  padding:10px 12px;
+  border:1px solid rgba(121,207,168,.15);
+  border-radius:7px;
+  background:#072b2a;
+  color:#a9d9c3;
+  font-size:9px;
+}
+
+.community-support-layout{
+  display:grid;
+  grid-template-columns:minmax(260px,.7fr) minmax(0,1.3fr);
+  gap:14px;
+}
+
+.community-support-intro,
+.community-support-form{
+  padding:22px;
+  border:1px solid rgba(205,235,239,.11);
+  border-radius:10px;
+  background:#082a35;
+}
+
+.community-support-intro>svg{
+  color:#79cfc9;
+}
+
+.community-support-intro h3{
+  margin:16px 0 0;
+  font-size:22px;
+}
+
+.community-support-intro>p{
+  margin:8px 0 0;
+  color:#84a5aa;
+  font-size:10px;
+  line-height:1.6;
+}
+
+.community-support-contact-note{
+  margin-top:24px;
+  padding-top:14px;
+  border-top:1px solid rgba(205,235,239,.09);
+}
+
+.community-support-contact-note strong,
+.community-support-contact-note span{
+  display:block;
+}
+
+.community-support-contact-note strong{
+  color:#d9ebeb;
+  font-size:9px;
+}
+
+.community-support-contact-note span{
+  margin-top:4px;
+  color:#77999f;
+  font-size:8px;
+  line-height:1.5;
+}
+
+.community-support-form{
+  display:grid;
+  gap:14px;
+}
+
+@media(max-width:1000px){
+  .community-feature-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
+
+@media(max-width:760px){
+  .community-support-layout,
+  .community-birthday-fields,
+  .community-support-grid,
+  .community-feature-grid{
+    grid-template-columns:1fr;
+  }
+
+  .community-birthday-form,
+  .community-support-intro,
+  .community-support-form{
+    padding:18px;
+  }
+}
