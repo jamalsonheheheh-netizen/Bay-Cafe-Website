@@ -2160,7 +2160,35 @@ async function syncDiscordCurrentWeek({reason="scheduled"}={}){
   }
 }
 
+async function recoverCurrentWeekIfEmpty({reason="startup-recovery"}={}){
+  const weekStart=startOfCurrentWeek();
+  const stored=readJson(FILES.discordMessages,[]);
+  const currentWeek=stored.filter(item=>new Date(item.createdAt)>=weekStart);
+
+  if(currentWeek.length>0){
+    return {recovered:false,messageCount:currentWeek.length,reason:"current-week-data-present"};
+  }
+
+  if(activitySyncRunning){
+    return {recovered:false,messageCount:0,reason:"sync-already-running"};
+  }
+
+  console.warn(`[Bay Café] No current-week Discord activity found. Starting full-week recovery from Monday.`);
+  activitySyncRunning=true;
+
+  try{
+    const messageCount=await rebuildDiscordHistory();
+    activityLastSyncedAt=new Date().toISOString();
+    broadcast("activity:recovered",{reason,messageCount,weekStart:weekStart.toISOString(),completedAt:activityLastSyncedAt});
+    return {recovered:true,messageCount,reason};
+  }finally{
+    activitySyncRunning=false;
+  }
+}
+
 async function backfillDiscord(){
+  const recovery=await recoverCurrentWeekIfEmpty({reason:"startup"});
+  if(recovery.recovered||recovery.reason==="sync-already-running")return recovery;
   return syncDiscordCurrentWeek({reason:"startup"});
 }
 
@@ -2926,6 +2954,11 @@ app.get("/api/activity/admin",auth,async(req,res)=>{
       warning:directoryWarning,
       cached:readJson(FILES.staffDirectory,{members:[]}).members?.length>0
     },
+    storage:{
+      directory:DATA_DIRECTORY,
+      messageFileExists:fs.existsSync(FILES.discordMessages),
+      persistentPath:DATA_DIRECTORY.startsWith("/data")
+    },
     members,
     teamTotals:{
       Corporate:members.filter(item=>item.team==="Corporate").length,
@@ -3042,6 +3075,68 @@ app.post("/api/activity/rebuild",auth,async(req,res)=>{
     activitySyncRunning=false;
   }
 });
+app.post("/api/activity/recover",auth,async(req,res)=>{
+  if(!isLeadershipOrOwnership(req.user)){
+    return res.status(403).json({success:false,message:"Leadership or Ownership access required."});
+  }
+  if(activitySyncRunning){
+    return res.status(409).json({success:false,message:"Activity is already syncing. Wait for it to finish."});
+  }
+
+  activitySyncRunning=true;
+  try{
+    const weekStart=startOfCurrentWeek();
+    const existing=readJson(FILES.discordMessages,[]);
+    const beforeWeek=existing.filter(item=>new Date(item.createdAt)<weekStart);
+    const guild=await trackedGuild();
+    if(!guild)throw new Error("Discord guild is unavailable.");
+
+    const eligible=await activityChannelsForGuild(guild);
+    const merged=new Map();
+
+    for(const channel of eligible){
+      if(!channel?.messages?.fetch)continue;
+      const messages=await fetchMessagesSince(channel,weekStart,10000).catch(error=>{
+        console.warn(`[Bay Café] Recovery skipped #${channel.name||channel.id}: ${error.message}`);
+        return [];
+      });
+
+      for(const message of messages){
+        if(!shouldTrackMessage(message))continue;
+        const record=await discordRecordResolved(message);
+        merged.set(String(record.id),record);
+      }
+    }
+
+    const currentWeek=[...merged.values()].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+    const sorted=[...currentWeek,...beforeWeek]
+      .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))
+      .slice(0,30000);
+
+    writeJson(FILES.discordMessages,sorted);
+    activityLastSyncedAt=new Date().toISOString();
+
+    broadcast("activity:recovered",{
+      reason:"manual",
+      messageCount:currentWeek.length,
+      weekStart:weekStart.toISOString(),
+      completedAt:activityLastSyncedAt
+    });
+
+    res.json({
+      success:true,
+      messageCount:currentWeek.length,
+      weekStart:weekStart.toISOString(),
+      completedAt:activityLastSyncedAt
+    });
+  }catch(error){
+    console.error(`[Bay Café] Activity recovery failed: ${error.stack||error.message}`);
+    res.status(500).json({success:false,message:error.message||"Unable to recover activity."});
+  }finally{
+    activitySyncRunning=false;
+  }
+});
+
 app.post("/api/activity/reset",auth,(req,res)=>{if(!isLeadershipOrOwnership(req.user))return res.status(403).json({success:false,message:"Leadership or Ownership access required."});archiveCurrentActivity("manual reset",req.user);const weekStart=startOfCurrentWeek();const all=readJson(FILES.discordMessages,[]);writeJson(FILES.discordMessages,all.filter(item=>new Date(item.createdAt)<weekStart));broadcast("activity:reset",{weekStart:weekStart.toISOString()});res.json({success:true});});
 
 

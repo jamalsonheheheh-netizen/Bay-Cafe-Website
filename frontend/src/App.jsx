@@ -2307,6 +2307,25 @@ function ActivityAdminPage({token,setToast}){
     }
   };
 
+  const recover=async()=>{
+    if(!window.confirm("Recover this week's Discord activity from Monday? This rescans Discord and restores the current week's message history."))return;
+
+    setLoading(true);
+    setRebuildStatus("Recovering this week's messages from Discord...");
+
+    try{
+      const result=await api("/api/activity/recover",{method:"POST"},token);
+      setRebuildStatus(`Recovery complete — ${result.messageCount||0} messages restored.`);
+      setToast(`Recovered ${result.messageCount||0} Discord messages.`);
+      await load();
+    }catch(error){
+      setRebuildStatus(`Recovery failed — ${error.message}`);
+      setToast(error.message);
+    }finally{
+      setLoading(false);
+    }
+  };
+
   const reset=async()=>{
     if(!window.confirm("Reset this week's activity? A snapshot will be archived first."))return;
 
@@ -2345,6 +2364,13 @@ function ActivityAdminPage({token,setToast}){
       text="See every current Corporate, Management, and Directing Team member, including members with zero messages. New Discord messages are captured live, background sync is incremental, and this page refreshes every 30 seconds."
       right={<Badge tone="green">Tracking</Badge>}
     />
+
+    {Number(data.thisWeekTracked||0)===0&&
+      <div className="activity-recovery-warning">
+        <strong>No current-week messages are stored.</strong>
+        <span>Use Recover Messages to rescan Discord from Monday and restore the activity history.</span>
+      </div>
+    }
 
     <div className="activity-admin-stats">
       <article><span>THIS WEEK</span><strong>{data.thisWeekTracked}</strong><small>tracked messages</small></article>
@@ -2499,6 +2525,9 @@ function ActivityAdminPage({token,setToast}){
         <button className="primary-btn" onClick={rebuild} disabled={loading}>
           {loading&&rebuildStatus?"Rebuilding...":"Rebuild Activity"}
         </button>
+          <button className="secondary-btn" onClick={recover} disabled={loading}>
+            Recover Messages
+          </button>
         {rebuildStatus&&
           <div className={`rebuild-status ${rebuildStatus.startsWith("Rebuild failed")?"error":""}`}>
             {loading&&<span className="rebuild-spinner"/>}

@@ -3358,3 +3358,34 @@ select:focus{
     font-size:24px!important;
   }
 }
+
+
+/* V64 — activity recovery */
+.activity-recovery-warning{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:13px 15px;
+  border:1px solid rgba(240,190,105,.22);
+  border-radius:8px;
+  background:rgba(120,80,25,.12);
+}
+
+.activity-recovery-warning strong{
+  font-size:10px;
+  color:#f2d29a;
+}
+
+.activity-recovery-warning span{
+  color:#ad9a78;
+  font-size:9px;
+  line-height:1.5;
+}
+
+@media(max-width:700px){
+  .activity-recovery-warning{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+}
