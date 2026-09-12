@@ -325,32 +325,25 @@ function StaffLoginEntrance(){
 }
 
 function StaffEntryTransition({user}){
-  return <main className="staff-pass-transition" aria-label="Opening Staff Hub">
-    <section className="staff-pass-card">
-      <div className="staff-pass-top">
-        <div className="staff-pass-brand"><Waves size={18}/><strong>BAY CAFÉ</strong></div>
-        <span>STAFF PASS</span>
-      </div>
-
-      <div className="staff-pass-person">
+  return <main className="staff-enter-transition" aria-label="Opening Staff Hub">
+    <section className="staff-enter-card">
+      <div className="staff-enter-avatar">
         {user?.avatar
           ? <img src={user.avatar} alt=""/>
-          : <div className="staff-pass-placeholder"><Users size={22}/></div>
+          : <Users size={22}/>
         }
-
-        <div>
-          <strong>{user?.displayName||"Bay Café Staff"}</strong>
-          <span>{user?.roleName||"Staff Member"}</span>
-        </div>
       </div>
 
-      <div className="staff-pass-bottom">
-        <span>Access confirmed</span>
-        <div className="staff-pass-lines"><i/><i/><i/><i/><i/><i/><i/></div>
+      <div className="staff-enter-copy">
+        <span>Bay Café Staff Hub</span>
+        <strong>Welcome back{user?.displayName?`, ${user.displayName}`:""}.</strong>
+        <small>{user?.roleName||"Staff Member"}</small>
+      </div>
+
+      <div className="staff-enter-progress">
+        <span/>
       </div>
     </section>
-
-    <div className="staff-pass-wave"/>
   </main>;
 }
 

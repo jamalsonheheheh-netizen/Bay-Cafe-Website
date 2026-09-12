@@ -4193,3 +4193,106 @@ select:focus{
   from{transform:translateY(26px)}
   to{transform:translateY(0)}
 }
+
+
+/* V69 — remove fake staff-pass transition */
+.staff-pass-transition,
+.staff-pass-card,
+.staff-pass-top,
+.staff-pass-brand,
+.staff-pass-person,
+.staff-pass-bottom,
+.staff-pass-lines,
+.staff-pass-wave{
+  display:none!important;
+}
+
+.staff-enter-transition{
+  min-height:100dvh;
+  display:grid;
+  place-items:center;
+  background:#061f29;
+}
+
+.staff-enter-card{
+  width:min(390px,calc(100vw - 40px));
+  display:grid;
+  grid-template-columns:auto 1fr;
+  align-items:center;
+  gap:14px;
+  animation:staffEnterIn .34s ease-out both;
+}
+
+.staff-enter-avatar{
+  width:56px;
+  height:56px;
+  border-radius:8px;
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  background:#0b3440;
+  color:#86d9d4;
+}
+
+.staff-enter-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+
+.staff-enter-copy span,
+.staff-enter-copy strong,
+.staff-enter-copy small{
+  display:block;
+}
+
+.staff-enter-copy span{
+  color:#78a3aa;
+  font-size:8px;
+}
+
+.staff-enter-copy strong{
+  margin-top:4px;
+  color:#effafa;
+  font-size:16px;
+  letter-spacing:-.015em;
+}
+
+.staff-enter-copy small{
+  margin-top:3px;
+  color:#8eb0b5;
+  font-size:9px;
+}
+
+.staff-enter-progress{
+  grid-column:1/-1;
+  height:2px;
+  margin-top:5px;
+  overflow:hidden;
+  background:#0b3440;
+}
+
+.staff-enter-progress span{
+  display:block;
+  width:100%;
+  height:100%;
+  transform-origin:left;
+  background:#78cfc9;
+  animation:staffEnterLine 1s ease-out both;
+}
+
+@keyframes staffEnterIn{
+  from{
+    opacity:0;
+    transform:translateY(7px);
+  }
+  to{
+    opacity:1;
+    transform:translateY(0);
+  }
+}
+
+@keyframes staffEnterLine{
+  from{transform:scaleX(0)}
+  to{transform:scaleX(1)}
+}
