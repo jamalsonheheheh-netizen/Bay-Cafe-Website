@@ -845,7 +845,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
             <div className="community-hero-copy">
               <span className="home-label">Bay Café</span>
               <h1>Welcome to Bay Café.</h1>
-              <p>Everything Bay Café in one place — announcements, careers, birthdays, and community information.</p>
+              <p>Everything Bay Café in one place | announcements, careers, birthdays, and community information.</p>
               <div className="button-row">
                 <button className="primary-btn" onClick={()=>setPage("careers")}>View Careers<ChevronRight size={15}/></button>
                 <button className="secondary-btn" onClick={()=>setPage("announcements")}>Announcements<Megaphone size={14}/></button>
@@ -1026,7 +1026,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
               <Cake size={20}/>
               <div>
                 <h3>Put in your birthday</h3>
-                <p>We only save the month and day — not your birth year.</p>
+                <p>We only save the month and day | not your birth year.</p>
               </div>
             </div>
 
