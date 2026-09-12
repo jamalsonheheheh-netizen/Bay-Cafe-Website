@@ -689,15 +689,11 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
       });
     }
 
-    const query=discordUsername
-      .replace(/^@/,"")
-      .trim()
-      .toLowerCase();
+    const rawQuery=discordUsername.replace(/^@/,"").trim();
+    const query=rawQuery.toLowerCase();
 
-    // Search the main Bay Café server. Fetching by query also catches members
-    // that are not currently in the bot's local member cache.
     const fetched=await guild.members.fetch({
-      query:discordUsername.replace(/^@/,"").trim(),
+      query:rawQuery,
       limit:100
     }).catch(()=>null);
 
@@ -710,11 +706,7 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
       const globalName=String(member.user?.globalName||"").toLowerCase();
       const displayName=String(member.displayName||"").toLowerCase();
 
-      return (
-        username===query||
-        globalName===query||
-        displayName===query
-      );
+      return username===query||globalName===query||displayName===query;
     });
 
     if(matches.length===0){
@@ -727,7 +719,7 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
     if(matches.length>1){
       return res.status(409).json({
         success:false,
-        message:"More than one server member matches that name. Enter your exact Discord username, not your server nickname."
+        message:"More than one member matches that name. Enter your exact Discord username, not your server nickname."
       });
     }
 
@@ -738,7 +730,7 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
       return res.status(409).json({
         success:false,
         code:"DISCORD_NOT_LINKED",
-        message:"That Discord account is in the server, but it is not linked to a Roblox account yet. Use Roblox verification once, then link Discord from Connections."
+        message:"That Discord account is not linked to Roblox yet. Use Roblox backup once, then link Discord from Connections."
       });
     }
 
@@ -746,7 +738,7 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
     if(!robloxUsername){
       return res.status(409).json({
         success:false,
-        message:"Your Discord link is missing its Roblox username. Re-link your account from Connections."
+        message:"Your Discord link is missing its Roblox username. Re-link it from Connections."
       });
     }
 
@@ -760,17 +752,26 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
     }
 
     const challengeId=crypto.randomUUID();
-    const code=String(crypto.randomInt(100000,1000000));
-    const expiresAt=Date.now()+5*60*1000;
+    const secret=crypto.randomBytes(24).toString("base64url");
+    const expiresAt=Date.now()+10*60*1000;
 
     mobileLoginChallenges.set(challengeId,{
       userId:String(user.id),
       username:user.username,
       discordId:String(discordMember.id),
-      codeHash:sign(`mobile:${challengeId}:${code}`),
+      secretHash:sign(`magic:${challengeId}:${secret}`),
       expiresAt,
       attempts:0
     });
+
+    const publicFrontend=String(
+      process.env.FRONTEND_URL||
+      String(ALLOWED_ORIGINS[0]||"https://bay-cafe.up.railway.app")
+    ).replace(/\/$/,"");
+
+    const magicUrl=
+      `${publicFrontend}/?bay_staff_login=${encodeURIComponent(challengeId)}`+
+      `&key=${encodeURIComponent(secret)}`;
 
     try{
       await discordMember.user.send({
@@ -779,10 +780,23 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
             .setColor(0x62c9c6)
             .setTitle("Bay Café Staff Login")
             .setDescription(
-              `Your one-time Staff Hub code is:\n\n**${code}**\n\nThis code expires in **5 minutes**. If you did not request this, ignore it.`
+              `Tap the button below to sign in as **${user.username}**.\n\nThe link expires in **10 minutes** and can only be used once. If you did not request this, ignore it.`
             )
             .setFooter({text:"Bay Café Staff Hub"})
             .setTimestamp()
+        ],
+        components:[
+          {
+            type:1,
+            components:[
+              {
+                type:2,
+                style:5,
+                label:"Open Staff Hub",
+                url:magicUrl
+              }
+            ]
+          }
         ]
       });
     }catch(error){
@@ -797,7 +811,8 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
     res.json({
       success:true,
       challengeId,
-      expiresInSeconds:300,
+      expiresInSeconds:600,
+      method:"magic-link",
       discordUser:{
         id:String(discordMember.id),
         username:discordMember.user.username,
@@ -820,59 +835,59 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
   }
 });
 
-app.post("/api/auth/mobile/verify",async(req,res)=>{
+app.post("/api/auth/mobile/redeem",async(req,res)=>{
   try{
     cleanupMobileLoginChallenges();
 
     const challengeId=String(req.body.challengeId||"");
-    const code=String(req.body.code||"").replace(/\D/g,"").slice(0,6);
+    const secret=String(req.body.key||"");
     const challenge=mobileLoginChallenges.get(challengeId);
 
     if(!challenge||challenge.expiresAt<=Date.now()){
       mobileLoginChallenges.delete(challengeId);
       return res.status(400).json({
         success:false,
-        message:"That mobile login code expired. Send yourself a new code."
+        message:"That sign-in link expired. Request a new one from Staff Login."
       });
     }
 
     challenge.attempts=Number(challenge.attempts||0)+1;
-    if(challenge.attempts>6){
+    if(challenge.attempts>8){
       mobileLoginChallenges.delete(challengeId);
       return res.status(429).json({
         success:false,
-        message:"Too many incorrect attempts. Send yourself a new code."
+        message:"That sign-in link can no longer be used. Request a new one."
       });
     }
 
-    if(code.length!==6||!safeSignatureMatches(`mobile:${challengeId}:${code}`,challenge.codeHash)){
+    if(!secret||!safeSignatureMatches(`magic:${challengeId}:${secret}`,challenge.secretHash)){
       return res.status(401).json({
         success:false,
-        message:"That code isn't correct."
+        message:"That sign-in link is invalid."
       });
     }
 
     const link=discordLinkForDiscordId(challenge.discordId);
     if(!link||String(link.robloxId)!==String(challenge.userId)){
-      mobileLoginChallenges.delete(challengeId);
       return res.status(403).json({
         success:false,
-        message:"Your Discord ↔ Roblox link changed. Start the login again."
+        message:"Your Discord ↔ Roblox link changed. Request a new sign-in link."
       });
     }
 
     const user=await buildWebsiteUser(challenge.username,{allowGuest:false});
 
     if(String(user.id)!==String(challenge.userId)||!isStaffAccess(user)){
-      mobileLoginChallenges.delete(challengeId);
       return res.status(403).json({
         success:false,
-        message:"Your Bay Café staff access changed. Please sign in again."
+        message:"Your Bay Café staff access changed. Request a new sign-in link."
       });
     }
 
     user.accessMode="staff";
     const token=createSessionToken(user);
+
+    // Consume ONLY after the session was successfully created.
     mobileLoginChallenges.delete(challengeId);
 
     res.json({
@@ -885,7 +900,7 @@ app.post("/api/auth/mobile/verify",async(req,res)=>{
   }catch(error){
     res.status(400).json({
       success:false,
-      message:error.message||"Unable to finish Mobile Login."
+      message:error.message||"Unable to finish Discord sign in."
     });
   }
 });

@@ -4296,3 +4296,66 @@ select:focus{
   from{transform:scaleX(0)}
   to{transform:scaleX(1)}
 }
+
+
+/* V70 — Discord one-tap sign in */
+.magic-link-sent{
+  padding:14px;
+  border:1px solid rgba(120,207,202,.16);
+  border-radius:8px;
+  display:flex;
+  align-items:flex-start;
+  gap:11px;
+  background:#061f29;
+}
+
+.magic-link-sent>svg{
+  flex:0 0 auto;
+  margin-top:1px;
+  color:#78cfc9;
+}
+
+.magic-link-sent strong,
+.magic-link-sent span{
+  display:block;
+}
+
+.magic-link-sent strong{
+  color:#e9f8f8;
+  font-size:10px;
+}
+
+.magic-link-sent span{
+  margin-top:4px;
+  color:#789ba1;
+  font-size:9px;
+  line-height:1.55;
+}
+
+.magic-login-screen{
+  min-height:100dvh;
+  display:grid;
+  place-items:center;
+  background:#061f29;
+}
+
+.magic-login-card{
+  display:grid;
+  justify-items:center;
+  gap:7px;
+  color:#edf9f9;
+}
+
+.magic-login-card svg{
+  margin-bottom:5px;
+  color:#79d1cc;
+}
+
+.magic-login-card strong{
+  font-size:14px;
+}
+
+.magic-login-card span{
+  color:#789da3;
+  font-size:9px;
+}
