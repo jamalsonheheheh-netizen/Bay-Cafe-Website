@@ -4564,3 +4564,173 @@ select:focus{
     padding:18px;
   }
 }
+
+
+/* V73 — Community Support ticket inbox */
+.community-ticket-section{
+  display:grid;
+  gap:18px;
+}
+
+.community-ticket-layout{
+  min-height:460px;
+  display:grid;
+  grid-template-columns:300px minmax(0,1fr);
+  gap:12px;
+}
+
+.community-ticket-list,
+.community-ticket-thread{
+  border:1px solid rgba(205,235,239,.11);
+  border-radius:10px;
+  background:#082a35;
+}
+
+.community-ticket-list{
+  padding:8px;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+
+.community-ticket-list button{
+  width:100%;
+  padding:11px;
+  border:0;
+  border-radius:7px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  background:transparent;
+  color:inherit;
+  text-align:left;
+}
+
+.community-ticket-list button:hover,
+.community-ticket-list button.active{
+  background:#0b3541;
+}
+
+.community-ticket-list button>div{
+  min-width:0;
+}
+
+.community-ticket-list strong,
+.community-ticket-list span{
+  display:block;
+}
+
+.community-ticket-list strong{
+  overflow:hidden;
+  color:#ecf8f8;
+  font-size:9px;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.community-ticket-list span{
+  margin-top:3px;
+  color:#73989f;
+  font-size:8px;
+}
+
+.community-ticket-thread{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+}
+
+.community-ticket-thread-head{
+  padding:16px;
+  border-bottom:1px solid rgba(205,235,239,.09);
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+}
+
+.community-ticket-thread-head h3{
+  margin:5px 0 0;
+  font-size:17px;
+}
+
+.community-ticket-thread-head small{
+  display:block;
+  margin-top:4px;
+  color:#688b91;
+  font-size:7px;
+}
+
+.community-ticket-messages{
+  min-height:250px;
+  padding:16px;
+  display:flex;
+  flex:1;
+  flex-direction:column;
+  gap:10px;
+  overflow:auto;
+}
+
+.community-ticket-messages article{
+  max-width:82%;
+  padding:10px 12px;
+  border-radius:8px;
+  background:#0b3541;
+}
+
+.community-ticket-messages article.mine{
+  margin-left:auto;
+}
+
+.community-ticket-messages article.staff{
+  margin-right:auto;
+  background:#103a32;
+}
+
+.community-ticket-messages article>div{
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+
+.community-ticket-messages article strong{
+  color:#e9f8f8;
+  font-size:8px;
+}
+
+.community-ticket-messages article span,
+.community-ticket-messages article small{
+  color:#72959b;
+  font-size:7px;
+}
+
+.community-ticket-messages article p{
+  margin:6px 0 0;
+  color:#bcd1d3;
+  font-size:9px;
+  line-height:1.55;
+  white-space:pre-wrap;
+}
+
+.community-ticket-reply{
+  padding:14px;
+  border-top:1px solid rgba(205,235,239,.09);
+  display:grid;
+  gap:10px;
+}
+
+@media(max-width:800px){
+  .community-ticket-layout{
+    grid-template-columns:1fr;
+  }
+
+  .community-ticket-list{
+    max-height:190px;
+    overflow:auto;
+  }
+
+  .community-ticket-thread{
+    min-height:430px;
+  }
+}

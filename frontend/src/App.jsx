@@ -19,6 +19,7 @@ const API =
           ""
         )
   ).replace(/\/$/, "");
+const COMMUNITY_SUPPORT_KEY="bay.cafe.community-support.v1";
 const TOKEN_KEY="bay.cafe.session",USER_KEY="bay.cafe.user";
 const APPLICATION_MIRROR_KEY="bay.cafe.applications.mirror.v1";
 
@@ -693,6 +694,10 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
   const[supportForm,setSupportForm]=useState({name:"",robloxUsername:"",discordUsername:"",type:"General Support",subject:"",details:""});
   const[supportSaving,setSupportSaving]=useState(false);
   const[supportMessage,setSupportMessage]=useState("");
+  const[communityTickets,setCommunityTickets]=useState([]);
+  const[selectedCommunityTicketId,setSelectedCommunityTicketId]=useState("");
+  const[communityReply,setCommunityReply]=useState("");
+  const[communityTicketLoading,setCommunityTicketLoading]=useState(false);
 
   const loadAnnouncements=async()=>{
     const result=await api("/api/announcements");
@@ -741,6 +746,57 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
     }
   };
 
+  const readCommunityTicketRefs=()=>{
+    try{
+      const parsed=JSON.parse(localStorage.getItem(COMMUNITY_SUPPORT_KEY)||"[]");
+      return Array.isArray(parsed)?parsed:[];
+    }catch{
+      return [];
+    }
+  };
+
+  const saveCommunityTicketRefs=refs=>{
+    try{
+      localStorage.setItem(
+        COMMUNITY_SUPPORT_KEY,
+        JSON.stringify(refs.slice(0,20))
+      );
+    }catch{}
+  };
+
+  const loadCommunityTickets=async()=>{
+    const refs=readCommunityTicketRefs();
+
+    if(!refs.length){
+      setCommunityTickets([]);
+      return;
+    }
+
+    const results=await Promise.all(
+      refs.map(async ref=>{
+        try{
+          const result=await api(
+            `/api/community/support/${encodeURIComponent(ref.id)}?key=${encodeURIComponent(ref.key)}`
+          );
+
+          return {
+            ...result.ticket,
+            accessKey:ref.key
+          };
+        }catch{
+          return null;
+        }
+      })
+    );
+
+    const valid=results.filter(Boolean);
+    setCommunityTickets(valid);
+
+    if(valid.length&&!selectedCommunityTicketId){
+      setSelectedCommunityTicketId(valid[0].id);
+    }
+  };
+
   const submitCommunitySupport=async event=>{
     event.preventDefault();
     setSupportSaving(true);
@@ -756,6 +812,21 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
       );
 
       setSupportMessage(result.message||"Your support request was sent.");
+
+      if(result.ticketId&&result.accessToken){
+        const refs=readCommunityTicketRefs()
+          .filter(item=>String(item.id)!==String(result.ticketId));
+
+        refs.unshift({
+          id:result.ticketId,
+          key:result.accessToken
+        });
+
+        saveCommunityTicketRefs(refs);
+        setSelectedCommunityTicketId(result.ticketId);
+        await loadCommunityTickets();
+      }
+
       setSupportForm({
         name:"",
         robloxUsername:"",
@@ -771,15 +842,73 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
     }
   };
 
+  const selectedCommunityTicket=
+    communityTickets.find(item=>String(item.id)===String(selectedCommunityTicketId))||
+    communityTickets[0]||
+    null;
+
+  const sendCommunityReply=async event=>{
+    event.preventDefault();
+    if(!selectedCommunityTicket||!communityReply.trim())return;
+
+    setCommunityTicketLoading(true);
+
+    try{
+      await api(
+        `/api/community/support/${selectedCommunityTicket.id}/messages`,
+        {
+          method:"POST",
+          body:JSON.stringify({
+            key:selectedCommunityTicket.accessKey,
+            content:communityReply
+          })
+        }
+      );
+
+      setCommunityReply("");
+      await loadCommunityTickets();
+    }catch(error){
+      setSupportMessage(error.message);
+    }finally{
+      setCommunityTicketLoading(false);
+    }
+  };
+
+  const closeCommunityTicket=async()=>{
+    if(!selectedCommunityTicket)return;
+
+    setCommunityTicketLoading(true);
+
+    try{
+      await api(
+        `/api/community/support/${selectedCommunityTicket.id}/close`,
+        {
+          method:"POST",
+          body:JSON.stringify({
+            key:selectedCommunityTicket.accessKey
+          })
+        }
+      );
+
+      await loadCommunityTickets();
+    }catch(error){
+      setSupportMessage(error.message);
+    }finally{
+      setCommunityTicketLoading(false);
+    }
+  };
+
   useEffect(()=>{
     loadAnnouncements().catch(()=>{});
     loadCareers().catch(()=>{});
     loadBirthdays().catch(()=>{});
+    loadCommunityTickets().catch(()=>{});
 
     const interval=setInterval(()=>{
       loadAnnouncements().catch(()=>{});
       loadCareers().catch(()=>{});
-      loadBirthdays().catch(()=>{});
+            loadBirthdays().catch(()=>{});
+      loadCommunityTickets().catch(()=>{});
     },15000);
 
     return()=>clearInterval(interval);
@@ -845,7 +974,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
             <div className="community-hero-copy">
               <span className="home-label">Bay Café</span>
               <h1>Welcome to Bay Café.</h1>
-              <p>Everything Bay Café in one place | announcements, careers, birthdays, and community information.</p>
+              <p>Everything Bay Café in one place — announcements, careers, birthdays, and community information.</p>
               <div className="button-row">
                 <button className="primary-btn" onClick={()=>setPage("careers")}>View Careers<ChevronRight size={15}/></button>
                 <button className="secondary-btn" onClick={()=>setPage("announcements")}>Announcements<Megaphone size={14}/></button>
@@ -1026,7 +1155,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
               <Cake size={20}/>
               <div>
                 <h3>Put in your birthday</h3>
-                <p>We only save the month and day | not your birth year.</p>
+                <p>We only save the month and day — not your birth year.</p>
               </div>
             </div>
 
@@ -1109,7 +1238,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
           <SectionHead
             kicker="COMMUNITY SUPPORT"
             title="Need help?"
-            text="Send a request directly to the Bay Café Support Team. You don't need to sign into the Staff Hub."
+            text="Send a request directly to the Bay Café Support Team. You can also view and reply to tickets you opened on this device."
           />
 
           <section className="community-support-layout">
@@ -1203,6 +1332,106 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
                 <div className="community-form-message">{supportMessage}</div>
               }
             </form>
+          </section>
+
+          <section className="community-ticket-section">
+            <SectionHead
+              kicker="YOUR SUPPORT"
+              title="Your tickets."
+              text="Tickets opened from this browser are saved here so you can check replies and continue the conversation."
+              right={<Badge>{communityTickets.length} SAVED</Badge>}
+            />
+
+            {communityTickets.length
+              ? <div className="community-ticket-layout">
+                  <aside className="community-ticket-list">
+                    {communityTickets.map(ticket=>
+                      <button
+                        type="button"
+                        key={ticket.id}
+                        className={String(selectedCommunityTicket?.id)===String(ticket.id)?"active":""}
+                        onClick={()=>setSelectedCommunityTicketId(ticket.id)}
+                      >
+                        <div>
+                          <strong>{ticket.subject}</strong>
+                          <span>{ticket.type}</span>
+                        </div>
+                        <Badge tone={ticket.status==="open"?"green":"sand"}>
+                          {ticket.status}
+                        </Badge>
+                      </button>
+                    )}
+                  </aside>
+
+                  <section className="community-ticket-thread">
+                    {selectedCommunityTicket&&
+                      <>
+                        <div className="community-ticket-thread-head">
+                          <div>
+                            <span className="eyebrow">{selectedCommunityTicket.type}</span>
+                            <h3>{selectedCommunityTicket.subject}</h3>
+                            <small>{selectedCommunityTicket.id}</small>
+                          </div>
+
+                          <div className="thread-actions">
+                            <Badge tone={selectedCommunityTicket.status==="open"?"green":"sand"}>
+                              {selectedCommunityTicket.status}
+                            </Badge>
+
+                            {selectedCommunityTicket.status==="open"&&
+                              <button
+                                type="button"
+                                className="secondary-btn compact"
+                                onClick={closeCommunityTicket}
+                                disabled={communityTicketLoading}
+                              >
+                                Close
+                              </button>
+                            }
+                          </div>
+                        </div>
+
+                        <div className="community-ticket-messages">
+                          {(selectedCommunityTicket.messages||[]).map(message=>
+                            <article
+                              key={message.id}
+                              className={message.authorType==="staff"?"staff":"mine"}
+                            >
+                              <div>
+                                <strong>{message.authorDisplayName||message.authorUsername||"Bay Café Support"}</strong>
+                                <span>{message.authorType==="staff"?"STAFF":"YOU"}</span>
+                                <small>{formatDate(message.createdAt)}</small>
+                              </div>
+                              <p>{message.content}</p>
+                            </article>
+                          )}
+                        </div>
+
+                        {selectedCommunityTicket.status==="open"
+                          ? <form className="community-ticket-reply" onSubmit={sendCommunityReply}>
+                              <textarea
+                                rows="3"
+                                value={communityReply}
+                                onChange={event=>setCommunityReply(event.target.value)}
+                                placeholder="Write a reply..."
+                              />
+                              <button className="primary-btn" disabled={communityTicketLoading}>
+                                {communityTicketLoading?"Sending...":"Send Reply"}
+                                <MessageCircleMore size={14}/>
+                              </button>
+                            </form>
+                          : <div className="closed-note">This ticket is closed.</div>
+                        }
+                      </>
+                    }
+                  </section>
+                </div>
+              : <Empty
+                  icon={LifeBuoy}
+                  title="No saved support tickets"
+                  text="When you open a Community Support ticket, it will show here on this device."
+                />
+            }
           </section>
         </div>
       }

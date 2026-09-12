@@ -3715,6 +3715,28 @@ function publicTicket(ticket){return {...ticket,messages:Array.isArray(ticket.me
 
 const communitySupportRate=new Map();
 
+function communitySupportTokenHash(ticketId,token){
+  return sign(`community-support:${ticketId}:${token}`);
+}
+
+function communitySupportTicketByAccess(ticketId,token){
+  const items=readJson(FILES.tickets,[]);
+  const ticket=items.find(item=>String(item.id)===String(ticketId));
+
+  if(!ticket||ticket.source!=="community"||!ticket.publicAccessHash){
+    return {items,ticket:null};
+  }
+
+  if(!safeSignatureMatches(
+    `community-support:${ticket.id}:${String(token||"")}`,
+    ticket.publicAccessHash
+  )){
+    return {items,ticket:null};
+  }
+
+  return {items,ticket};
+}
+
 function communitySupportRateKey(req){
   return String(
     req.headers["cf-connecting-ip"]||
@@ -3748,8 +3770,11 @@ app.post("/api/community/support",async(req,res)=>{
     if(subject.length<3||details.length<5)return res.status(400).json({success:false,message:"Add a subject and details."});
 
     const now=new Date().toISOString();
+    const ticketId=crypto.randomUUID();
+    const publicAccessToken=crypto.randomBytes(24).toString("base64url");
     const ticket={
-      id:crypto.randomUUID(),
+      id:ticketId,
+      publicAccessHash:communitySupportTokenHash(ticketId,publicAccessToken),
       userId:`community:${crypto.randomUUID()}`,
       username:robloxUsername||discordUsername,
       displayName:name,
@@ -3827,6 +3852,16 @@ app.post("/api/community/support",async(req,res)=>{
     res.status(201).json({
       success:true,
       ticketId:ticket.id,
+      accessToken:publicAccessToken,
+      ticket:{
+        id:ticket.id,
+        type:ticket.type,
+        subject:ticket.subject,
+        status:ticket.status,
+        createdAt:ticket.createdAt,
+        updatedAt:ticket.updatedAt,
+        messages:ticket.messages
+      },
       message:"Your support request was sent to Bay Café Support."
     });
   }catch(error){
@@ -3835,6 +3870,146 @@ app.post("/api/community/support",async(req,res)=>{
       message:error.message||"Unable to send your support request."
     });
   }
+});
+
+
+app.get("/api/community/support/:ticketId",(req,res)=>{
+  const token=String(req.query.key||"");
+  const {ticket}=communitySupportTicketByAccess(req.params.ticketId,token);
+
+  if(!ticket){
+    return res.status(404).json({
+      success:false,
+      message:"Support ticket not found on this device."
+    });
+  }
+
+  res.json({
+    success:true,
+    ticket:{
+      id:ticket.id,
+      type:ticket.type,
+      subject:ticket.subject,
+      status:ticket.status,
+      createdAt:ticket.createdAt,
+      updatedAt:ticket.updatedAt,
+      closedAt:ticket.closedAt||null,
+      messages:Array.isArray(ticket.messages)?ticket.messages:[]
+    }
+  });
+});
+
+app.post("/api/community/support/:ticketId/messages",async(req,res)=>{
+  const token=String(req.body.key||"");
+  const content=String(req.body.content||"").trim().slice(0,1800);
+  const {items,ticket}=communitySupportTicketByAccess(req.params.ticketId,token);
+
+  if(!ticket){
+    return res.status(404).json({
+      success:false,
+      message:"Support ticket not found on this device."
+    });
+  }
+
+  if(ticket.status==="closed"){
+    return res.status(400).json({
+      success:false,
+      message:"This support ticket is closed."
+    });
+  }
+
+  if(!content){
+    return res.status(400).json({
+      success:false,
+      message:"Write a message first."
+    });
+  }
+
+  const message={
+    id:crypto.randomUUID(),
+    authorType:"user",
+    authorId:"community",
+    authorDisplayName:ticket.displayName||"Community Member",
+    authorUsername:ticket.discordUsername||ticket.username||"community",
+    content,
+    createdAt:new Date().toISOString()
+  };
+
+  ticket.messages??=[];
+  ticket.messages.push(message);
+  ticket.updatedAt=new Date().toISOString();
+
+  if(ticket.discordThreadId&&discordClient?.isReady()){
+    const thread=await discordClient.channels.fetch(ticket.discordThreadId).catch(()=>null);
+
+    if(thread?.isTextBased()){
+      await thread.send({
+        embeds:[
+          new EmbedBuilder()
+            .setColor(0x38bdf8)
+            .setAuthor({name:`${message.authorDisplayName} • Community Website`})
+            .setDescription(content)
+            .setTimestamp()
+        ]
+      }).catch(()=>null);
+    }
+  }
+
+  writeJson(FILES.tickets,items);
+  broadcast("ticket:update",publicTicket(ticket));
+
+  res.json({
+    success:true,
+    ticket:{
+      id:ticket.id,
+      type:ticket.type,
+      subject:ticket.subject,
+      status:ticket.status,
+      createdAt:ticket.createdAt,
+      updatedAt:ticket.updatedAt,
+      messages:ticket.messages
+    }
+  });
+});
+
+app.post("/api/community/support/:ticketId/close",async(req,res)=>{
+  const token=String(req.body.key||"");
+  const {items,ticket}=communitySupportTicketByAccess(req.params.ticketId,token);
+
+  if(!ticket){
+    return res.status(404).json({
+      success:false,
+      message:"Support ticket not found on this device."
+    });
+  }
+
+  if(ticket.status!=="closed"){
+    ticket.status="closed";
+    ticket.closedAt=new Date().toISOString();
+    ticket.updatedAt=ticket.closedAt;
+
+    if(ticket.discordThreadId&&discordClient?.isReady()){
+      const thread=await discordClient.channels.fetch(ticket.discordThreadId).catch(()=>null);
+
+      if(thread?.isThread?.()){
+        await thread.send("Community user closed this ticket from the website.").catch(()=>null);
+        await thread.setLocked(true,"Community ticket closed").catch(()=>null);
+        await thread.setArchived(true,"Community ticket closed").catch(()=>null);
+      }
+    }
+
+    writeJson(FILES.tickets,items);
+    broadcast("ticket:update",publicTicket(ticket));
+  }
+
+  res.json({
+    success:true,
+    ticket:{
+      id:ticket.id,
+      status:ticket.status,
+      closedAt:ticket.closedAt||null
+    }
+  });
 });
 
 app.get("/api/tickets",auth,(req,res)=>{const items=readJson(FILES.tickets,[]);const visible=req.user.capabilities?.ticketAdmin?items:items.filter(t=>String(t.userId)===String(req.user.id));res.json({success:true,tickets:visible.map(publicTicket)});});
