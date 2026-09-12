@@ -4087,3 +4087,109 @@ select:focus{
     justify-self:center;
   }
 }
+
+
+/* V68 — simple, non-cinematic Staff Login transition */
+.staff-door-transition,
+.staff-door,
+.staff-door-center,
+.staff-door-sign{
+  display:none!important;
+}
+
+.staff-login-transition{
+  min-height:100dvh;
+  position:relative;
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  background:#061f29;
+}
+
+.staff-login-transition-inner{
+  width:min(340px,calc(100vw - 48px));
+  position:relative;
+  z-index:2;
+  display:grid;
+  grid-template-columns:auto 1fr;
+  align-items:center;
+  gap:13px;
+  animation:staffLoginSimpleIn .34s ease-out both;
+}
+
+.staff-login-transition-mark{
+  width:48px;
+  height:48px;
+  border-radius:8px;
+  display:grid;
+  place-items:center;
+  background:#86d9d4;
+  color:#06242d;
+}
+
+.staff-login-transition-copy strong,
+.staff-login-transition-copy span{
+  display:block;
+}
+
+.staff-login-transition-copy strong{
+  color:#effafa;
+  font-size:15px;
+  letter-spacing:-.01em;
+}
+
+.staff-login-transition-copy span{
+  margin-top:3px;
+  color:#7fa3aa;
+  font-size:9px;
+}
+
+.staff-login-transition-line{
+  grid-column:1/-1;
+  height:2px;
+  margin-top:5px;
+  overflow:hidden;
+  background:#0b3440;
+}
+
+.staff-login-transition-line span{
+  display:block;
+  width:100%;
+  height:100%;
+  transform-origin:left;
+  background:#76cfc9;
+  animation:staffLoginSimpleLine .56s ease-out both;
+}
+
+.staff-login-transition-wave{
+  width:120%;
+  height:80px;
+  position:absolute;
+  left:-10%;
+  bottom:-58px;
+  border-radius:50% 50% 0 0;
+  background:#0b3c49;
+  opacity:.9;
+  animation:staffLoginWaveUp .6s ease-out both;
+}
+
+@keyframes staffLoginSimpleIn{
+  from{
+    opacity:0;
+    transform:translateY(8px);
+  }
+  to{
+    opacity:1;
+    transform:translateY(0);
+  }
+}
+
+@keyframes staffLoginSimpleLine{
+  from{transform:scaleX(0)}
+  to{transform:scaleX(1)}
+}
+
+@keyframes staffLoginWaveUp{
+  from{transform:translateY(26px)}
+  to{transform:translateY(0)}
+}

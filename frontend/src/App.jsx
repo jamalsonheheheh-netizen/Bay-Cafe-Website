@@ -304,17 +304,23 @@ function SiteIntro(){
 }
 
 function StaffLoginEntrance(){
-  return <main className="staff-door-transition" aria-label="Opening staff login">
-    <div className="staff-door door-left"><span>BAY CAFÉ</span></div>
-    <div className="staff-door door-right"><span>STAFF ONLY</span></div>
-
-    <section className="staff-door-center">
-      <div className="staff-door-sign">
-        <Coffee size={21}/>
-        <strong>Staff entrance</strong>
-        <span>Opening sign in…</span>
+  return <main className="staff-login-transition" aria-label="Opening staff login">
+    <div className="staff-login-transition-inner">
+      <div className="staff-login-transition-mark">
+        <Waves size={24}/>
       </div>
-    </section>
+
+      <div className="staff-login-transition-copy">
+        <strong>Bay Café</strong>
+        <span>Opening staff sign in</span>
+      </div>
+
+      <div className="staff-login-transition-line">
+        <span/>
+      </div>
+    </div>
+
+    <div className="staff-login-transition-wave"/>
   </main>;
 }
 
@@ -3316,7 +3322,7 @@ export default function App(){
     setTimeout(()=>{
       setStaffLoginEntrance(false);
       setCommunityOpen(false);
-    },950);
+    },620);
   };
 
   const returnToRememberedStaff=()=>{
