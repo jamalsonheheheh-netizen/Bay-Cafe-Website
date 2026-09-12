@@ -2884,3 +2884,314 @@
   text-align:center;
   margin-top:4px;
 }
+
+
+/* V62 — natural Bay Café visual pass
+   Less template/dashboard styling: flatter surfaces, normal labels, fewer pills,
+   no glass blur, no decorative floating UI, and more conventional spacing. */
+
+:root{
+  --natural-panel:#082934;
+  --natural-panel-2:#0a303c;
+  --natural-border:rgba(205,235,239,.10);
+}
+
+/* Stop the tiny all-caps / wide-letter-spacing look. */
+.eyebrow,
+.home-label,
+.card-kicker,
+.staff-nav-section,
+.topbar-copy span,
+.metrics-grid article>span,
+.activity-admin-stats span,
+label>span,
+.department-heads>span,
+.link-code span,
+.link-code small,
+.admin-access-indicator,
+.community-entry-divider{
+  text-transform:none!important;
+  letter-spacing:0!important;
+  font-weight:650!important;
+}
+
+/* More readable helper labels. */
+.eyebrow,
+.home-label,
+.card-kicker,
+.topbar-copy span{
+  font-size:9px!important;
+}
+
+.staff-nav-section{
+  font-size:8px!important;
+  color:#789aa2!important;
+}
+
+/* Remove glassmorphism / excessive blur. */
+.sidebar,
+.topbar,
+.community-header{
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+}
+
+.sidebar{
+  background:#061f29!important;
+}
+
+.topbar{
+  background:#06232d!important;
+}
+
+.community-header{
+  background:#06232d!important;
+}
+
+/* Flatter, more conventional cards. */
+.hero-card,
+.rank-card,
+.metrics-grid article,
+.discord-card,
+.announcement-card,
+.community-feature-card,
+.community-quick-grid article,
+.birthday-card,
+.activity-admin-stats article,
+.activity-admin-card,
+.ops-card,
+.ops-row,
+.staff-directory-card,
+.profile-drawer-stats div,
+.audit-row,
+.ticket-form,
+.ticket-thread,
+.ticket-list,
+.info-card{
+  border-radius:10px!important;
+  box-shadow:none!important;
+  background:var(--natural-panel)!important;
+  border-color:var(--natural-border)!important;
+}
+
+/* Hero should look like a website header, not a generated dashboard widget. */
+.community-hero,
+.staff-hero-rich{
+  border-radius:12px!important;
+  overflow:hidden!important;
+  background:#082b36!important;
+  border:1px solid var(--natural-border)!important;
+  box-shadow:none!important;
+}
+
+.community-hero-copy h1,
+.staff-hero-copy h1{
+  letter-spacing:-.035em!important;
+  line-height:1.02!important;
+}
+
+.community-hero-copy h1 em,
+.staff-hero-copy h1 em{
+  color:inherit!important;
+  font-style:normal!important;
+}
+
+/* Hide purely decorative "AI dashboard" ornaments. */
+.hero-art-chip,
+.staff-hero-floating,
+.rank-orbit,
+.hero-waterline,
+.community-cafe-accents,
+.intro-particles,
+.intro-electric-ring,
+.intro-bolt{
+  display:none!important;
+}
+
+/* Keep artwork clean and prominent. */
+.community-hero-art img,
+.staff-hero-visual img{
+  border-radius:8px!important;
+  border:0!important;
+}
+
+.staff-hero-visual{
+  padding:0!important;
+}
+
+/* Buttons: solid and familiar instead of glossy gradient CTAs. */
+.primary-btn{
+  background:#82d9d4!important;
+  color:#05262f!important;
+  border:1px solid #82d9d4!important;
+  border-radius:8px!important;
+  box-shadow:none!important;
+}
+
+.secondary-btn,
+.text-button,
+.community-staff-login,
+.community-remembered-user{
+  background:transparent!important;
+  border:1px solid var(--natural-border)!important;
+  border-radius:8px!important;
+  box-shadow:none!important;
+}
+
+.primary-btn:hover,
+.secondary-btn:hover{
+  transform:none!important;
+}
+
+/* Sidebar feels like actual staff software rather than a concept mockup. */
+.sidebar .staff-nav button{
+  border-radius:6px!important;
+  min-height:36px!important;
+}
+
+.sidebar .staff-nav button.active{
+  background:#0b3440!important;
+  box-shadow:none!important;
+  border-left:2px solid #75d9d3!important;
+}
+
+.user-mini{
+  border-radius:8px!important;
+  background:transparent!important;
+}
+
+/* Pills/tags are quieter. */
+.badge,
+.capability-tags span,
+.discord-pill,
+.profile-badge,
+.directory-badges span{
+  border-radius:5px!important;
+  box-shadow:none!important;
+}
+
+.capability-tags{
+  gap:5px!important;
+}
+
+.capability-tags span{
+  background:transparent!important;
+  border:1px solid var(--natural-border)!important;
+}
+
+/* The colored community banner stays, but remove the fake floating icon decor. */
+.community-update-banner{
+  min-height:112px!important;
+  border-radius:10px!important;
+  padding:22px 24px!important;
+  box-shadow:none!important;
+}
+
+.community-update-copy h2{
+  font-size:23px!important;
+}
+
+/* Stats read like information, not neon KPI cards. */
+.metrics-grid article,
+.activity-admin-stats article{
+  padding:16px!important;
+}
+
+.metrics-grid article>strong,
+.activity-admin-stats strong{
+  font-size:22px!important;
+}
+
+.metrics-grid article>svg{
+  color:#86c7c6!important;
+}
+
+/* Forms: simple internal-tool styling. */
+input,
+textarea,
+select{
+  border-radius:7px!important;
+  background:#061f29!important;
+  border-color:var(--natural-border)!important;
+}
+
+input:focus,
+textarea:focus,
+select:focus{
+  background:#072630!important;
+  border-color:#6fbdbd!important;
+  box-shadow:none!important;
+}
+
+/* Don't make every section feel like a marketing component. */
+.page-stack{
+  gap:28px!important;
+  animation:none!important;
+}
+
+.section-head h2{
+  letter-spacing:-.025em!important;
+}
+
+.section-head .eyebrow{
+  color:#77b2b4!important;
+}
+
+/* Remove artificial "LIVE" green-dot treatment in the header. */
+.topbar-status{
+  color:#86aeb4!important;
+  font-weight:600!important;
+}
+
+.status-dot{
+  width:6px!important;
+  height:6px!important;
+  box-shadow:none!important;
+  background:#79b9a4!important;
+}
+
+/* Natural public navigation. */
+.community-nav button{
+  border-radius:6px!important;
+}
+
+.community-nav button.active{
+  background:#0b3440!important;
+  box-shadow:none!important;
+}
+
+/* Less card-on-card nesting in operations pages. */
+.ops-two-col,
+.activity-admin-grid{
+  gap:12px!important;
+}
+
+.ops-note,
+.link-code{
+  border-radius:7px!important;
+  background:#07242e!important;
+}
+
+/* Photos/artwork should be the visual personality, not UI decoration. */
+.community-feature-card img,
+.staff-shortcut img,
+.about-visual-strip img{
+  filter:none!important;
+}
+
+.staff-shortcut{
+  border-radius:10px!important;
+  box-shadow:none!important;
+}
+
+/* Mobile keeps the same simpler treatment. */
+@media(max-width:700px){
+  .community-update-banner{
+    border-radius:8px!important;
+  }
+
+  .community-hero,
+  .staff-hero-rich{
+    border-radius:8px!important;
+  }
+}

@@ -588,8 +588,8 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
           <section className="community-hero community-hero-rich">
             <div className="community-hero-copy">
               <span className="home-label">Bay Café</span>
-              <h1>Welcome to <em>the Bay.</em></h1>
-              <p>Grab a drink, catch up with the community, check what's new, or see where you can get involved.</p>
+              <h1>Welcome to Bay Café.</h1>
+              <p>Everything Bay Café in one place — announcements, careers, birthdays, and community information.</p>
               <div className="button-row">
                 <button className="primary-btn" onClick={()=>setPage("careers")}>View Careers<ChevronRight size={15}/></button>
                 <button className="secondary-btn" onClick={()=>setPage("announcements")}>Announcements<Megaphone size={14}/></button>
@@ -602,8 +602,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
             </div>
             <div className="community-hero-art">
               <img src={bayHeroArt} alt="Bay Café beach illustration"/>
-              <div className="hero-art-chip chip-one"><Waves size={13}/>By the water</div>
-              <div className="hero-art-chip chip-two"><Coffee size={13}/>Bay Café</div>
+
             </div>
           </section>
 
@@ -626,9 +625,9 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
 
           <section className="community-color-banner community-update-banner">
             <div className="community-update-copy">
-              <span className="home-label">SEE WHAT’S HAPPENED</span>
-              <h2>Catch up on Bay Café.</h2>
-              <p>Catch up on the latest announcements, events, staff updates, and opportunities from Bay Café.</p>
+              <span className="home-label">Around Bay Café</span>
+              <h2>What’s been happening</h2>
+              <p>Recent announcements, events, staff news, and opportunities.</p>
             </div>
 
             <div className="community-cafe-accents" aria-hidden="true">
@@ -639,9 +638,9 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
 
           <section>
             <SectionHead
-              kicker="LATEST"
-              title="Community announcements."
-              text="Recent updates from Bay Café."
+              kicker="Announcements"
+              title="Latest from Bay Café"
+              text="Recent posts from the community."
             />
 
             <div className="announcement-preview-grid">
@@ -923,7 +922,7 @@ function Dashboard({token,user,onLogout,onCommunity}){
     {id:"discipline",label:"Staff Records",icon:Gavel,section:"STAFF",show:canModerateStaff},
     {id:"applications",label:"Applications",icon:FilePenLine,section:"STAFF",show:hasLeadershipAccess},
 
-    {id:"information",label:"Staff Info",icon:BookOpen,section:"TOOLS",show:true},
+    {id:"information",label:"Resources",icon:BookOpen,section:"TOOLS",show:true},
     {id:"directory",label:"Staff Directory",icon:Users,section:"TOOLS",show:true},
     {id:"departments",label:"Departments",icon:Building2,section:"TOOLS",show:true},
     {id:"connections",label:"Connections",icon:Network,section:"TOOLS",show:true},
@@ -1134,7 +1133,7 @@ function Dashboard({token,user,onLogout,onCommunity}){
     page==="search"?"Search":
     page==="notifications"?"Notifications":
     page==="audit"?"Audit Log":
-    page==="information"?"Information Hub":
+    page==="information"?"Resources":
     page==="profiles"?"Profile Lookup":
     page==="tickets"?"Support Center":
     "Staff Overview";
@@ -1289,10 +1288,10 @@ function Overview({user,stats,discordMessages,announcements,navigate}){
       <article className="hero-card staff-hero-rich">
         <div className="hero-waterline"/>
         <div className="staff-hero-copy">
-          <span className="home-label">Staff Hub</span>
+          <span className="home-label">Bay Café staff</span>
           <h1>Hey, <em>{user.displayName}.</em></h1>
           <p>
-            You're signed in as <strong>{user.roleName}</strong>. Everything you need for your role is right here.
+            Signed in as <strong>{user.roleName}</strong>. Your staff tools and updates are below.
           </p>
           <div className="button-row">
             <button className="primary-btn" onClick={()=>navigate("announcements")}>
@@ -1305,7 +1304,7 @@ function Overview({user,stats,discordMessages,announcements,navigate}){
         </div>
         <div className="staff-hero-visual">
           <img src={sunsetArt} alt="Bay Café sunset"/>
-          <div className="staff-hero-floating"><Coffee size={14}/>Bay Café Staff</div>
+
         </div>
       </article>
 
@@ -1342,26 +1341,26 @@ function Overview({user,stats,discordMessages,announcements,navigate}){
 
     <section>
       <SectionHead
-        kicker="YOUR DASHBOARD"
-        title="Quick look"
-        text="A few things you might want to check before you get started."
+        kicker="Overview"
+        title="Today at Bay Café"
+        text="The main things tied to your account right now."
       />
       <div className="metrics-grid">
         <article>
           <Users size={18}/>
-          <span>GROUP MEMBERS</span>
+          <span>Roblox members</span>
           <strong>{formatNumber(stats?.group?.memberCount)}</strong>
           <p>In the Roblox group</p>
         </article>
         <article>
           <MessageCircleMore size={18}/>
-          <span>YOUR MESSAGES</span>
+          <span>Your messages</span>
           <strong>{formatNumber(discordMessages.length)}</strong>
           <p>Since Monday</p>
         </article>
         <article>
           <Activity size={18}/>
-          <span>TRACKER</span>
+          <span>Discord tracker</span>
           <strong>{stats?.discord?.connected?"ONLINE":"OFFLINE"}</strong>
           <p>Discord connection</p>
         </article>
@@ -1370,9 +1369,9 @@ function Overview({user,stats,discordMessages,announcements,navigate}){
 
     <section>
       <SectionHead
-        kicker="OFFICIAL UPDATES"
-        title="Latest announcements."
-        text="Recent posts from the official Bay Café announcement channel."
+        kicker="Announcements"
+        title="Latest announcements"
+        text="Recent posts from the Bay Café announcement channel."
         right={
           <button className="text-button" onClick={()=>navigate("announcements")}>
             View all<ArrowRight size={13}/>
@@ -1394,9 +1393,9 @@ function Overview({user,stats,discordMessages,announcements,navigate}){
 
     <section>
       <SectionHead
-        kicker="LIVE DISCORD"
-        title="Your recent activity."
-        text="Your newest tracked Discord messages from this week."
+        kicker="Discord activity"
+        title="Your recent messages"
+        text="Messages counted toward your activity this week."
         right={
           <button className="text-button" onClick={()=>navigate("discord")}>
             Open activity<ArrowRight size={13}/>
@@ -1449,9 +1448,9 @@ function DiscordTracker({messages,channels}){
 
   return <div className="page-stack">
     <SectionHead
-      kicker="YOUR WEEKLY ACTIVITY"
-      title="Community activity."
-      text="Only your own tracked Discord messages from the current week are shown here."
+      kicker="Your activity"
+      title="This week on Discord"
+      text="Your tracked Discord messages from the current week."
     />
 
     <div className="activity-summary-grid">
@@ -2179,10 +2178,10 @@ function ActivityAdminPage({token,setToast}){
 
   return <div className="page-stack">
     <SectionHead
-      kicker="LEADERSHIP / OWNERSHIP"
-      title="Activity Management."
+      kicker="Leadership"
+      title="Activity Management"
       text="See every current Corporate, Management, and Directing Team member, including members with zero messages. New Discord messages are captured live, background sync is incremental, and this page refreshes every 30 seconds."
-      right={<Badge tone="green">LIVE TRACKING</Badge>}
+      right={<Badge tone="green">Tracking</Badge>}
     />
 
     <div className="activity-admin-stats">
@@ -2394,7 +2393,7 @@ function CommunityAdminPage({token,birthdays,reloadBirthdays,setToast}){
   };
 
   return <div className="page-stack">
-    <SectionHead kicker="LEADERSHIP / OWNERSHIP" title="Community Management." text="Manage public community features such as birthday announcements." right={<Badge tone="green">PRIVATE</Badge>}/>
+    <SectionHead kicker="Leadership" title="Community Management." text="Manage public community features such as birthday announcements." right={<Badge tone="green">PRIVATE</Badge>}/>
     <form className="birthday-admin-form" onSubmit={submit}>
       <div><span className="eyebrow">ADD BIRTHDAY</span><h2>Community birthday</h2><p>Birthdays appear publicly and automatically get a celebration banner on the correct day.</p></div>
       <div className="birthday-form-grid">
