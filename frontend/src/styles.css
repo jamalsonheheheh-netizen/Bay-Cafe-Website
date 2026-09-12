@@ -3389,3 +3389,701 @@ select:focus{
     flex-direction:column;
   }
 }
+
+
+/* V65 — Community-first entry + natural staff entrance/pass transitions */
+
+.staff-door-transition,
+.staff-pass-transition{
+  min-height:100dvh;
+  position:relative;
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  background:#092f3b;
+}
+
+/* Staff entrance: two simple café back-room doors opening.
+   No scans, neon grids, orbit rings, or fake "system" UI. */
+.staff-door{
+  position:absolute;
+  top:0;
+  bottom:0;
+  width:50.5%;
+  z-index:3;
+  display:flex;
+  align-items:flex-end;
+  padding:28px;
+  background:#0b3b48;
+  border-color:rgba(230,243,239,.12);
+  border-style:solid;
+  color:#b8cfce;
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.04em;
+}
+
+.staff-door.door-left{
+  left:0;
+  justify-content:flex-start;
+  border-width:0 1px 0 0;
+  animation:bayDoorLeft .95s cubic-bezier(.7,0,.3,1) forwards;
+}
+
+.staff-door.door-right{
+  right:0;
+  justify-content:flex-end;
+  border-width:0 0 0 1px;
+  animation:bayDoorRight .95s cubic-bezier(.7,0,.3,1) forwards;
+}
+
+.staff-door-center{
+  position:relative;
+  z-index:2;
+}
+
+.staff-door-sign{
+  min-width:210px;
+  padding:18px 20px;
+  border:1px solid rgba(240,224,185,.22);
+  border-radius:7px;
+  display:grid;
+  justify-items:center;
+  gap:5px;
+  background:#d8c39a;
+  color:#173642;
+  transform:rotate(-1.2deg);
+}
+
+.staff-door-sign svg{
+  margin-bottom:4px;
+}
+
+.staff-door-sign strong{
+  font-size:15px;
+}
+
+.staff-door-sign span{
+  color:#516568;
+  font-size:9px;
+}
+
+/* Authenticated entrance: a physical staff pass, like something a café
+   employee would actually carry. */
+.staff-pass-transition{
+  background:#082a35;
+}
+
+.staff-pass-card{
+  width:min(360px,calc(100vw - 40px));
+  padding:18px;
+  position:relative;
+  z-index:2;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:9px;
+  background:#e8e3d8;
+  color:#18343b;
+  box-shadow:0 18px 45px rgba(0,0,0,.22);
+  transform:rotate(-1deg);
+  animation:staffPassIn .7s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.staff-pass-card::before{
+  content:"";
+  width:52px;
+  height:8px;
+  position:absolute;
+  left:50%;
+  top:10px;
+  transform:translateX(-50%);
+  border-radius:10px;
+  background:#b9b2a6;
+}
+
+.staff-pass-top{
+  margin-top:8px;
+  padding-bottom:12px;
+  border-bottom:1px solid rgba(24,52,59,.16);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+
+.staff-pass-brand{
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+
+.staff-pass-brand strong{
+  font-size:10px;
+  letter-spacing:.02em;
+}
+
+.staff-pass-top>span{
+  color:#657478;
+  font-size:8px;
+  font-weight:700;
+}
+
+.staff-pass-person{
+  padding:20px 0;
+  display:flex;
+  align-items:center;
+  gap:13px;
+}
+
+.staff-pass-person img,
+.staff-pass-placeholder{
+  width:58px;
+  height:58px;
+  border-radius:6px;
+  object-fit:cover;
+}
+
+.staff-pass-placeholder{
+  display:grid;
+  place-items:center;
+  background:#c9d3d0;
+}
+
+.staff-pass-person strong,
+.staff-pass-person span{
+  display:block;
+}
+
+.staff-pass-person strong{
+  font-size:16px;
+}
+
+.staff-pass-person span{
+  margin-top:4px;
+  color:#64787b;
+  font-size:9px;
+}
+
+.staff-pass-bottom{
+  padding-top:11px;
+  border-top:1px solid rgba(24,52,59,.16);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+}
+
+.staff-pass-bottom>span{
+  color:#3f7565;
+  font-size:8px;
+  font-weight:700;
+}
+
+.staff-pass-lines{
+  height:22px;
+  display:flex;
+  align-items:stretch;
+  gap:3px;
+}
+
+.staff-pass-lines i{
+  width:2px;
+  background:#253f45;
+}
+
+.staff-pass-lines i:nth-child(2),
+.staff-pass-lines i:nth-child(5){
+  width:4px;
+}
+
+.staff-pass-wave{
+  width:130%;
+  height:120px;
+  position:absolute;
+  left:-15%;
+  bottom:-72px;
+  border-radius:50% 50% 0 0;
+  background:#0d5262;
+  animation:staffPassWave 1.25s ease-in-out both;
+}
+
+@keyframes bayDoorLeft{
+  0%,28%{transform:translateX(0)}
+  100%{transform:translateX(-103%)}
+}
+
+@keyframes bayDoorRight{
+  0%,28%{transform:translateX(0)}
+  100%{transform:translateX(103%)}
+}
+
+@keyframes staffPassIn{
+  from{opacity:0;transform:translateY(18px) rotate(-3deg)}
+  to{opacity:1;transform:translateY(0) rotate(-1deg)}
+}
+
+@keyframes staffPassWave{
+  0%{transform:translateY(55px)}
+  100%{transform:translateY(0)}
+}
+
+/* The remembered-device button is now the main quick return to staff. */
+.community-remembered-user{
+  border-color:rgba(117,217,211,.22)!important;
+  background:#0a3541!important;
+}
+
+/* Make "Leave Staff Hub" read as returning to the public site, not deleting
+   the remembered session. */
+.logout-btn{
+  color:#a8c5c9!important;
+}
+
+@media(max-width:700px){
+  .staff-door{
+    padding:18px;
+  }
+
+  .staff-door-sign{
+    min-width:180px;
+    padding:15px 17px;
+  }
+
+  .staff-pass-card{
+    width:calc(100vw - 32px);
+  }
+}
+
+
+/* V66 — simpler Staff Hub navigation + top search */
+.topbar{
+  gap:14px;
+}
+
+.topbar-search{
+  width:min(430px,42vw);
+  margin-left:auto;
+  position:relative;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:0 11px;
+  border:1px solid rgba(205,235,239,.10);
+  border-radius:7px;
+  background:#061f29;
+  color:#789da5;
+}
+
+.topbar-search>svg{
+  flex:0 0 auto;
+}
+
+.topbar-search input{
+  min-height:38px!important;
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:#edf8f8;
+  font-size:10px!important;
+}
+
+.topbar-search input::placeholder{
+  color:#668b93;
+}
+
+.topbar-search-loading{
+  flex:0 0 auto;
+  color:#71979e;
+  font-size:8px;
+}
+
+.topbar-search-results{
+  position:absolute;
+  left:0;
+  right:0;
+  top:calc(100% + 7px);
+  z-index:70;
+  padding:5px;
+  border:1px solid rgba(205,235,239,.11);
+  border-radius:8px;
+  background:#061f29;
+  box-shadow:0 16px 38px rgba(0,0,0,.26);
+}
+
+.topbar-search-results button{
+  width:100%;
+  min-height:48px;
+  padding:8px 10px;
+  border:0;
+  border-radius:5px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  background:transparent;
+  color:inherit;
+  text-align:left;
+}
+
+.topbar-search-results button:hover{
+  background:#0a3440;
+}
+
+.topbar-search-results strong,
+.topbar-search-results span{
+  display:block;
+}
+
+.topbar-search-results strong{
+  color:#e8f7f7;
+  font-size:9px;
+}
+
+.topbar-search-results span{
+  margin-top:3px;
+  color:#789da5;
+  font-size:8px;
+}
+
+.topbar-search-results small{
+  color:#72a4aa;
+  font-size:7px;
+  text-transform:capitalize;
+}
+
+.topbar-search-empty{
+  padding:12px;
+  color:#7699a0;
+  font-size:9px;
+  text-align:center;
+}
+
+.topbar-status{
+  margin-left:0!important;
+}
+
+@media(max-width:900px){
+  .topbar{
+    flex-wrap:wrap;
+    height:auto!important;
+    min-height:72px;
+    padding:10px 16px!important;
+  }
+
+  .topbar-search{
+    order:3;
+    width:100%;
+    margin-left:0;
+  }
+
+  .topbar-status{
+    margin-left:auto!important;
+  }
+}
+
+
+/* V67 — staff sign in redesign */
+.staff-login-page{
+  min-height:100dvh;
+  padding:28px;
+  display:grid;
+  place-items:center;
+  background:#061f29;
+}
+
+.staff-login-layout{
+  width:min(980px,100%);
+  min-height:610px;
+  display:grid;
+  grid-template-columns:minmax(0,.9fr) minmax(390px,1fr);
+  overflow:hidden;
+  border:1px solid rgba(205,235,239,.11);
+  border-radius:12px;
+  background:#082a35;
+}
+
+.staff-login-scene{
+  min-height:610px;
+  position:relative;
+  overflow:hidden;
+  background:#0a3b48;
+}
+
+.staff-login-scene::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(
+    180deg,
+    rgba(5,28,36,.06) 0%,
+    rgba(5,28,36,.18) 48%,
+    rgba(5,28,36,.88) 100%
+  );
+}
+
+.staff-login-scene img{
+  width:100%;
+  height:100%;
+  position:absolute;
+  inset:0;
+  object-fit:cover;
+}
+
+.staff-login-scene-copy{
+  position:absolute;
+  left:30px;
+  right:30px;
+  bottom:30px;
+  z-index:2;
+  color:#f3fbfb;
+}
+
+.staff-login-brand{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.03em;
+}
+
+.staff-login-scene-copy h1{
+  margin:17px 0 0;
+  font-size:44px;
+  letter-spacing:-.045em;
+}
+
+.staff-login-scene-copy p{
+  margin:7px 0 0;
+  color:#c0d5d5;
+  font-size:11px;
+}
+
+.staff-login-panel{
+  min-width:0;
+  padding:38px;
+  display:flex;
+  flex-direction:column;
+  background:#082a35;
+}
+
+.staff-login-panel-head>span{
+  display:block;
+  margin-top:30px;
+  color:#78aaa9;
+  font-size:9px;
+  font-weight:700;
+}
+
+.staff-login-panel-head h2{
+  margin:7px 0 0;
+  font-size:34px;
+  letter-spacing:-.035em;
+}
+
+.staff-login-panel-head p{
+  margin:9px 0 0;
+  max-width:430px;
+  color:#88a8ae;
+  font-size:10px;
+  line-height:1.55;
+}
+
+.login-back-link{
+  padding:0;
+  border:0;
+  background:transparent;
+  color:#95b8bd;
+  font-size:9px;
+}
+
+.staff-login-methods{
+  margin:25px 0 22px;
+  display:flex;
+  gap:18px;
+  border-bottom:1px solid rgba(205,235,239,.09);
+}
+
+.staff-login-methods button{
+  min-height:38px;
+  padding:0 1px;
+  position:relative;
+  border:0;
+  background:transparent;
+  color:#718f96;
+  font-size:9px;
+  font-weight:700;
+}
+
+.staff-login-methods button.active{
+  color:#e8f8f8;
+}
+
+.staff-login-methods button.active::after{
+  content:"";
+  height:2px;
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:-1px;
+  background:#78cfca;
+}
+
+.staff-login-form{
+  display:grid;
+  gap:14px;
+}
+
+.staff-login-form label{
+  display:grid;
+  gap:7px;
+}
+
+.staff-login-form label>span{
+  font-size:9px!important;
+  text-transform:none!important;
+  letter-spacing:0!important;
+}
+
+.staff-login-form input{
+  min-height:48px!important;
+}
+
+.staff-login-form>.primary-btn{
+  width:100%;
+  min-height:46px;
+}
+
+.staff-login-help{
+  margin:0;
+  color:#7899a0;
+  font-size:9px;
+  line-height:1.55;
+}
+
+.linked-login-card{
+  padding:13px;
+  border:1px solid rgba(205,235,239,.10);
+  border-radius:8px;
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  align-items:center;
+  gap:10px;
+  background:#061f29;
+}
+
+.linked-login-row{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:9px;
+}
+
+.linked-login-row img{
+  width:38px;
+  height:38px;
+  flex:0 0 auto;
+  border-radius:6px;
+  object-fit:cover;
+  background:#0b3945;
+}
+
+.linked-login-row div{
+  min-width:0;
+}
+
+.linked-login-row span,
+.linked-login-row strong,
+.linked-login-row small{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.linked-login-row span{
+  color:#6e969c;
+  font-size:7px;
+}
+
+.linked-login-row strong{
+  margin-top:2px;
+  color:#edf8f8;
+  font-size:9px;
+}
+
+.linked-login-row small{
+  margin-top:2px;
+  color:#78999e;
+  font-size:7px;
+}
+
+.linked-login-arrow{
+  color:#6ea5a6;
+  font-size:16px;
+}
+
+.staff-login-foot{
+  margin-top:auto;
+  padding-top:26px;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:#698c93;
+  font-size:8px;
+}
+
+.staff-login-panel .verification-code{
+  border-radius:7px!important;
+  background:#061f29!important;
+}
+
+@media(max-width:760px){
+  .staff-login-page{
+    padding:0;
+    display:block;
+  }
+
+  .staff-login-layout{
+    min-height:100dvh;
+    grid-template-columns:1fr;
+    border:0;
+    border-radius:0;
+  }
+
+  .staff-login-scene{
+    min-height:190px;
+    max-height:190px;
+  }
+
+  .staff-login-scene-copy{
+    left:20px;
+    bottom:18px;
+  }
+
+  .staff-login-scene-copy h1{
+    margin-top:10px;
+    font-size:30px;
+  }
+
+  .staff-login-panel{
+    min-height:calc(100dvh - 190px);
+    padding:24px 20px;
+  }
+
+  .staff-login-panel-head>span{
+    margin-top:22px;
+  }
+
+  .staff-login-panel-head h2{
+    font-size:30px;
+  }
+
+  .linked-login-card{
+    grid-template-columns:1fr;
+  }
+
+  .linked-login-arrow{
+    transform:rotate(90deg);
+    justify-self:center;
+  }
+}

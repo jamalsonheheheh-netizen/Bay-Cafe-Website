@@ -661,33 +661,101 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
   try{
     cleanupMobileLoginChallenges();
 
-    const username=String(req.body.username||"").trim();
-    if(!username){
-      return res.status(400).json({success:false,message:"Enter your Roblox username."});
-    }
+    const discordUsername=String(
+      req.body.discordUsername||
+      req.body.username||
+      ""
+    ).trim();
 
-    const user=await buildWebsiteUser(username,{allowGuest:false});
-
-    if(!isStaffAccess(user)){
-      return res.status(403).json({
+    if(!discordUsername){
+      return res.status(400).json({
         success:false,
-        message:"Staff access begins at Directing Team."
-      });
-    }
-
-    const link=discordLinkForRobloxId(user.id);
-    if(!link){
-      return res.status(409).json({
-        success:false,
-        code:"DISCORD_NOT_LINKED",
-        message:"This Roblox account is not linked to Discord yet. Sign in with Roblox About once, then open Connections and link your Discord account. After that, Mobile Login will work."
+        message:"Enter your Discord username."
       });
     }
 
     if(!discordClient?.isReady()){
       return res.status(503).json({
         success:false,
-        message:"The Bay Café Discord bot is currently offline. Try again in a moment."
+        message:"The Bay Café Discord bot is offline right now. Try again in a moment."
+      });
+    }
+
+    const guild=await trackedGuild();
+    if(!guild){
+      return res.status(503).json({
+        success:false,
+        message:"The Bay Café main server is unavailable right now."
+      });
+    }
+
+    const query=discordUsername
+      .replace(/^@/,"")
+      .trim()
+      .toLowerCase();
+
+    // Search the main Bay Café server. Fetching by query also catches members
+    // that are not currently in the bot's local member cache.
+    const fetched=await guild.members.fetch({
+      query:discordUsername.replace(/^@/,"").trim(),
+      limit:100
+    }).catch(()=>null);
+
+    const candidates=fetched
+      ? [...fetched.values()]
+      : [...guild.members.cache.values()];
+
+    const matches=candidates.filter(member=>{
+      const username=String(member.user?.username||"").toLowerCase();
+      const globalName=String(member.user?.globalName||"").toLowerCase();
+      const displayName=String(member.displayName||"").toLowerCase();
+
+      return (
+        username===query||
+        globalName===query||
+        displayName===query
+      );
+    });
+
+    if(matches.length===0){
+      return res.status(404).json({
+        success:false,
+        message:"I couldn't find that Discord username in the main Bay Café server."
+      });
+    }
+
+    if(matches.length>1){
+      return res.status(409).json({
+        success:false,
+        message:"More than one server member matches that name. Enter your exact Discord username, not your server nickname."
+      });
+    }
+
+    const discordMember=matches[0];
+    const link=discordLinkForDiscordId(discordMember.id);
+
+    if(!link){
+      return res.status(409).json({
+        success:false,
+        code:"DISCORD_NOT_LINKED",
+        message:"That Discord account is in the server, but it is not linked to a Roblox account yet. Use Roblox verification once, then link Discord from Connections."
+      });
+    }
+
+    const robloxUsername=String(link.robloxUsername||"").trim();
+    if(!robloxUsername){
+      return res.status(409).json({
+        success:false,
+        message:"Your Discord link is missing its Roblox username. Re-link your account from Connections."
+      });
+    }
+
+    const user=await buildWebsiteUser(robloxUsername,{allowGuest:false});
+
+    if(!isStaffAccess(user)){
+      return res.status(403).json({
+        success:false,
+        message:"Staff access begins at Directing Team."
       });
     }
 
@@ -698,20 +766,20 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
     mobileLoginChallenges.set(challengeId,{
       userId:String(user.id),
       username:user.username,
+      discordId:String(discordMember.id),
       codeHash:sign(`mobile:${challengeId}:${code}`),
       expiresAt,
       attempts:0
     });
 
     try{
-      const discordUser=await discordClient.users.fetch(String(link.discordId));
-      await discordUser.send({
+      await discordMember.user.send({
         embeds:[
           new EmbedBuilder()
             .setColor(0x62c9c6)
-            .setTitle("Bay Café Mobile Login")
+            .setTitle("Bay Café Staff Login")
             .setDescription(
-              `Your one-time Staff Hub login code is:\n\n**${code}**\n\nThis code expires in **5 minutes**. If you did not request this, ignore this message.`
+              `Your one-time Staff Hub code is:\n\n**${code}**\n\nThis code expires in **5 minutes**. If you did not request this, ignore it.`
             )
             .setFooter({text:"Bay Café Staff Hub"})
             .setTimestamp()
@@ -719,9 +787,10 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
       });
     }catch(error){
       mobileLoginChallenges.delete(challengeId);
+
       return res.status(400).json({
         success:false,
-        message:"I couldn't DM your linked Discord account. Make sure DMs from server members are enabled, then try again."
+        message:"I found your account, but I couldn't DM you. Enable DMs from server members and try again."
       });
     }
 
@@ -729,20 +798,24 @@ app.post("/api/auth/mobile/start",async(req,res)=>{
       success:true,
       challengeId,
       expiresInSeconds:300,
+      discordUser:{
+        id:String(discordMember.id),
+        username:discordMember.user.username,
+        displayName:discordMember.displayName||discordMember.user.globalName||discordMember.user.username,
+        avatar:discordMember.displayAvatarURL?.({size:128})||""
+      },
       user:{
+        id:user.id,
         username:user.username,
         displayName:user.displayName,
         avatar:user.avatar,
         roleName:user.roleName
-      },
-      discordHint:link.discordUsername
-        ? `@${String(link.discordUsername).slice(0,2)}•••`
-        : "your linked Discord account"
+      }
     });
   }catch(error){
     res.status(400).json({
       success:false,
-      message:error.message||"Unable to start Mobile Login."
+      message:error.message||"Unable to start Discord login."
     });
   }
 });
@@ -776,6 +849,15 @@ app.post("/api/auth/mobile/verify",async(req,res)=>{
       return res.status(401).json({
         success:false,
         message:"That code isn't correct."
+      });
+    }
+
+    const link=discordLinkForDiscordId(challenge.discordId);
+    if(!link||String(link.robloxId)!==String(challenge.userId)){
+      mobileLoginChallenges.delete(challengeId);
+      return res.status(403).json({
+        success:false,
+        message:"Your Discord ↔ Roblox link changed. Start the login again."
       });
     }
 

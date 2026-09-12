@@ -303,39 +303,55 @@ function SiteIntro(){
   </main>;
 }
 
-function StaffEntryTransition({user}){
-  return <main className="staff-entry-transition">
-    <div className="staff-transition-grid"/>
-    <div className="staff-transition-glow"/>
-    <div className="staff-transition-scan"/>
+function StaffLoginEntrance(){
+  return <main className="staff-door-transition" aria-label="Opening staff login">
+    <div className="staff-door door-left"><span>BAY CAFÉ</span></div>
+    <div className="staff-door door-right"><span>STAFF ONLY</span></div>
 
-    <section className="staff-transition-card">
-      <div className="staff-shield-ring">
-        <ShieldCheck size={34}/>
-      </div>
-
-      <span className="eyebrow">STAFF ACCESS VERIFIED</span>
-      <h1>Welcome back{user?.displayName?`, ${user.displayName}`:""}.</h1>
-      <p>Preparing your Bay Café Staff Hub...</p>
-
-      <div className="staff-loading-track">
-        <span/>
-      </div>
-
-      <div className="staff-loading-steps">
-        <span>Identity</span>
-        <span>Permissions</span>
-        <span>Workspace</span>
+    <section className="staff-door-center">
+      <div className="staff-door-sign">
+        <Coffee size={21}/>
+        <strong>Staff entrance</strong>
+        <span>Opening sign in…</span>
       </div>
     </section>
   </main>;
 }
 
+function StaffEntryTransition({user}){
+  return <main className="staff-pass-transition" aria-label="Opening Staff Hub">
+    <section className="staff-pass-card">
+      <div className="staff-pass-top">
+        <div className="staff-pass-brand"><Waves size={18}/><strong>BAY CAFÉ</strong></div>
+        <span>STAFF PASS</span>
+      </div>
+
+      <div className="staff-pass-person">
+        {user?.avatar
+          ? <img src={user.avatar} alt=""/>
+          : <div className="staff-pass-placeholder"><Users size={22}/></div>
+        }
+
+        <div>
+          <strong>{user?.displayName||"Bay Café Staff"}</strong>
+          <span>{user?.roleName||"Staff Member"}</span>
+        </div>
+      </div>
+
+      <div className="staff-pass-bottom">
+        <span>Access confirmed</span>
+        <div className="staff-pass-lines"><i/><i/><i/><i/><i/><i/><i/></div>
+      </div>
+    </section>
+
+    <div className="staff-pass-wave"/>
+  </main>;
+}
+
 function Login({onLogin,checking,onCommunity}){
-  const[method,setMethod]=useState(
-    ()=>window.matchMedia?.("(max-width: 760px)")?.matches?"mobile":"roblox"
-  );
-  const[username,setUsername]=useState("");
+  const[method,setMethod]=useState("discord");
+  const[discordUsername,setDiscordUsername]=useState("");
+  const[robloxUsername,setRobloxUsername]=useState("");
   const[challenge,setChallenge]=useState(null);
   const[mobileChallenge,setMobileChallenge]=useState(null);
   const[mobileCode,setMobileCode]=useState("");
@@ -350,10 +366,69 @@ function Login({onLogin,checking,onCommunity}){
     setMessage("");
   };
 
+  const startDiscord=async event=>{
+    event?.preventDefault();
+
+    if(!discordUsername.trim()){
+      return setMessage("Enter your Discord username.");
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try{
+      const result=await api(
+        "/api/auth/mobile/start",
+        {
+          method:"POST",
+          body:JSON.stringify({
+            discordUsername:discordUsername.trim()
+          })
+        }
+      );
+
+      setMobileChallenge(result);
+    }catch(error){
+      setMessage(error.message);
+    }finally{
+      setLoading(false);
+    }
+  };
+
+  const verifyDiscord=async event=>{
+    event?.preventDefault();
+
+    if(mobileCode.replace(/\D/g,"").length!==6){
+      return setMessage("Enter the 6-digit code from the Bay Café bot.");
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try{
+      const result=await api(
+        "/api/auth/mobile/verify",
+        {
+          method:"POST",
+          body:JSON.stringify({
+            challengeId:mobileChallenge.challengeId,
+            code:mobileCode
+          })
+        }
+      );
+
+      onLogin(result.token,result.user);
+    }catch(error){
+      setMessage(error.message);
+    }finally{
+      setLoading(false);
+    }
+  };
+
   const startRoblox=async event=>{
     event?.preventDefault();
 
-    if(!username.trim()){
+    if(!robloxUsername.trim()){
       return setMessage("Enter your Roblox username.");
     }
 
@@ -367,7 +442,7 @@ function Login({onLogin,checking,onCommunity}){
           {
             method:"POST",
             body:JSON.stringify({
-              username,
+              username:robloxUsername,
               mode:"staff"
             })
           }
@@ -403,251 +478,200 @@ function Login({onLogin,checking,onCommunity}){
     }
   };
 
-  const startMobile=async event=>{
-    event?.preventDefault();
-
-    if(!username.trim()){
-      return setMessage("Enter your Roblox username.");
-    }
-
-    setLoading(true);
-    setMessage("");
-
-    try{
-      const result=await api(
-        "/api/auth/mobile/start",
-        {
-          method:"POST",
-          body:JSON.stringify({username})
-        }
-      );
-
-      setMobileChallenge(result);
-      setMessage("Check Discord — I sent your 6-digit login code.");
-    }catch(error){
-      setMessage(error.message);
-    }finally{
-      setLoading(false);
-    }
-  };
-
-  const verifyMobile=async event=>{
-    event?.preventDefault();
-
-    if(mobileCode.replace(/\D/g,"").length!==6){
-      return setMessage("Enter the 6-digit code from the Bay Café bot.");
-    }
-
-    setLoading(true);
-    setMessage("");
-
-    try{
-      const result=await api(
-        "/api/auth/mobile/verify",
-        {
-          method:"POST",
-          body:JSON.stringify({
-            challengeId:mobileChallenge.challengeId,
-            code:mobileCode
-          })
-        }
-      );
-
-      onLogin(result.token,result.user);
-    }catch(error){
-      setMessage(error.message);
-    }finally{
-      setLoading(false);
-    }
-  };
-
-  return <main className="login-shell">
-    <section className="login-card mobile-ready-login">
-      <div className="brand-row">
-        <div className="bay-mark"><Waves size={22}/></div>
-        <div>
-          <strong>BAY CAFÉ</strong>
-          <span>STAFF HUB</span>
-        </div>
-      </div>
-
-      <div className="login-copy">
-        <span className="eyebrow"><ShieldCheck size={13}/>Staff sign in</span>
-        <h1>Sign in to Bay Café.</h1>
-        <p>Directing Team and above can access the Staff Hub.</p>
-      </div>
-
-      <div className="login-method-tabs" role="tablist" aria-label="Login method">
-        <button
-          type="button"
-          className={method==="mobile"?"active":""}
-          onClick={()=>switchMethod("mobile")}
-        >
-          Mobile Login
-        </button>
-        <button
-          type="button"
-          className={method==="roblox"?"active":""}
-          onClick={()=>switchMethod("roblox")}
-        >
-          Roblox About
-        </button>
-      </div>
-
-      {method==="mobile"&&
-        <div className="mobile-login-panel">
-          {!mobileChallenge
-            ? <form className="login-form" onSubmit={startMobile}>
-                <label>
-                  <span>Roblox username</span>
-                  <input
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    value={username}
-                    onChange={event=>setUsername(event.target.value)}
-                    placeholder="Your Roblox username"
-                  />
-                </label>
-
-                <p className="mobile-login-help">
-                  We’ll DM a one-time code to the Discord account linked to this Roblox account.
-                </p>
-
-                <button className="primary-btn" disabled={loading||checking}>
-                  {loading?"Sending...":"Send Discord Code"}
-                  <MessageCircleMore size={15}/>
-                </button>
-              </form>
-            : <form className="mobile-code-form" onSubmit={verifyMobile}>
-                <div className="verify-user">
-                  <img src={mobileChallenge.user.avatar} alt=""/>
-                  <div>
-                    <strong>{mobileChallenge.user.displayName}</strong>
-                    <span>@{mobileChallenge.user.username} • {mobileChallenge.user.roleName}</span>
-                  </div>
-                </div>
-
-                <div className="mobile-code-sent">
-                  Code sent to <strong>{mobileChallenge.discordHint||"your linked Discord"}</strong>.
-                </div>
-
-                <label>
-                  <span>6-digit code</span>
-                  <input
-                    className="mobile-code-input"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    value={mobileCode}
-                    onChange={event=>setMobileCode(event.target.value.replace(/\D/g,"").slice(0,6))}
-                    placeholder="000000"
-                    autoFocus
-                  />
-                </label>
-
-                <button className="primary-btn" disabled={loading}>
-                  {loading?"Signing in...":"Sign In"}
-                  <ArrowRight size={15}/>
-                </button>
-
-                <button
-                  type="button"
-                  className="login-link-button"
-                  onClick={()=>{setMobileChallenge(null);setMobileCode("");setMessage("");}}
-                >
-                  Send a new code
-                </button>
-              </form>
-          }
-
-          <div className="mobile-login-note">
-            <strong>First time?</strong>
-            <span>
-              Your Discord account has to be linked first. If it isn't linked yet, use Roblox About once, then link Discord from Connections. After that, Mobile Login works without editing your Roblox profile.
-            </span>
+  return <main className="staff-login-page">
+    <section className="staff-login-layout">
+      <aside className="staff-login-scene">
+        <img src={bayHeroArt} alt="Bay Café sunset by the water"/>
+        <div className="staff-login-scene-copy">
+          <div className="staff-login-brand">
+            <Waves size={20}/>
+            <span>BAY CAFÉ</span>
           </div>
+          <h1>Staff Hub</h1>
+          <p>For Bay Café staff, all in one place.</p>
         </div>
-      }
+      </aside>
 
-      {method==="roblox"&&
-        <>
-          {!challenge
-            ? <form className="login-form" onSubmit={startRoblox}>
-                <label>
-                  <span>Roblox username</span>
-                  <input
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    value={username}
-                    onChange={event=>setUsername(event.target.value)}
-                    placeholder="Your Roblox username"
-                  />
-                </label>
+      <section className="staff-login-panel">
+        <div className="staff-login-panel-head">
+          <button type="button" className="login-back-link" onClick={onCommunity}>
+            ← Back to Community
+          </button>
+          <span>Staff access</span>
+          <h2>Sign in</h2>
+          <p>Use the Discord account you use in the main Bay Café server.</p>
+        </div>
 
-                <button className="primary-btn" disabled={loading||checking}>
-                  {loading?"Checking...":"Continue"}
-                  <ArrowRight size={15}/>
-                </button>
-              </form>
-            : <div className="verify-panel">
-                <div className="verify-user">
-                  <img src={challenge.user.avatar} alt=""/>
-                  <div>
-                    <strong>{challenge.user.displayName}</strong>
-                    <span>@{challenge.user.username}</span>
+        <div className="staff-login-methods">
+          <button
+            type="button"
+            className={method==="discord"?"active":""}
+            onClick={()=>switchMethod("discord")}
+          >
+            Discord
+          </button>
+          <button
+            type="button"
+            className={method==="roblox"?"active":""}
+            onClick={()=>switchMethod("roblox")}
+          >
+            Roblox backup
+          </button>
+        </div>
+
+        {method==="discord"&&
+          <>
+            {!mobileChallenge
+              ? <form className="staff-login-form" onSubmit={startDiscord}>
+                  <label>
+                    <span>Discord username</span>
+                    <input
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      value={discordUsername}
+                      onChange={event=>setDiscordUsername(event.target.value)}
+                      placeholder="example"
+                      autoFocus
+                    />
+                  </label>
+
+                  <p className="staff-login-help">
+                    We find you in the main server, use your linked Roblox account, and DM you a one-time code.
+                  </p>
+
+                  <button className="primary-btn" disabled={loading||checking}>
+                    {loading?"Finding account…":"Continue"}
+                    <ArrowRight size={15}/>
+                  </button>
+                </form>
+              : <form className="staff-login-form" onSubmit={verifyDiscord}>
+                  <div className="linked-login-card">
+                    <div className="linked-login-row">
+                      <img src={mobileChallenge.discordUser?.avatar} alt=""/>
+                      <div>
+                        <span>Discord</span>
+                        <strong>{mobileChallenge.discordUser?.displayName}</strong>
+                        <small>@{mobileChallenge.discordUser?.username}</small>
+                      </div>
+                    </div>
+
+                    <div className="linked-login-arrow">→</div>
+
+                    <div className="linked-login-row">
+                      <img src={mobileChallenge.user?.avatar} alt=""/>
+                      <div>
+                        <span>Roblox</span>
+                        <strong>{mobileChallenge.user?.displayName}</strong>
+                        <small>@{mobileChallenge.user?.username} • {mobileChallenge.user?.roleName}</small>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="staff-login-help">
+                    A 6-digit code was sent to your Discord DMs.
+                  </p>
+
+                  <label>
+                    <span>Login code</span>
+                    <input
+                      className="mobile-code-input"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={mobileCode}
+                      onChange={event=>setMobileCode(event.target.value.replace(/\D/g,"").slice(0,6))}
+                      placeholder="000000"
+                      autoFocus
+                    />
+                  </label>
+
+                  <button className="primary-btn" disabled={loading}>
+                    {loading?"Signing in…":"Enter Staff Hub"}
+                    <ArrowRight size={15}/>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="login-link-button"
+                    onClick={()=>{
+                      setMobileChallenge(null);
+                      setMobileCode("");
+                      setMessage("");
+                    }}
+                  >
+                    Use another Discord account
+                  </button>
+                </form>
+            }
+          </>
+        }
+
+        {method==="roblox"&&
+          <>
+            {!challenge
+              ? <form className="staff-login-form" onSubmit={startRoblox}>
+                  <label>
+                    <span>Roblox username</span>
+                    <input
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      value={robloxUsername}
+                      onChange={event=>setRobloxUsername(event.target.value)}
+                      placeholder="Your Roblox username"
+                    />
+                  </label>
+
+                  <p className="staff-login-help">
+                    Backup sign-in for staff who have not linked Discord yet.
+                  </p>
+
+                  <button className="primary-btn" disabled={loading||checking}>
+                    {loading?"Checking…":"Continue"}
+                    <ArrowRight size={15}/>
+                  </button>
+                </form>
+              : <div className="staff-login-form">
+                  <div className="verify-user">
+                    <img src={challenge.user.avatar} alt=""/>
+                    <div>
+                      <strong>{challenge.user.displayName}</strong>
+                      <span>@{challenge.user.username}</span>
+                    </div>
+                  </div>
+
+                  <p className="staff-login-help">
+                    Add this code to your Roblox About section:
+                  </p>
+
+                  <div className="verification-code">{challenge.code}</div>
+
+                  <div className="button-row">
+                    <a
+                      className="secondary-btn"
+                      href={challenge.profileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open Roblox<ExternalLink size={14}/>
+                    </a>
+
+                    <button className="primary-btn" onClick={verifyRoblox} disabled={loading}>
+                      {loading?"Checking…":"Verify"}
+                      <CheckCircle2 size={15}/>
+                    </button>
                   </div>
                 </div>
+            }
+          </>
+        }
 
-                <p>
-                  Put this code anywhere in your Roblox <strong>About</strong> section:
-                </p>
+        {message&&<div className="login-message">{message}</div>}
 
-                <div className="verification-code">{challenge.code}</div>
-
-                <div className="button-row">
-                  <a
-                    className="secondary-btn"
-                    href={challenge.profileUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open Roblox<ExternalLink size={14}/>
-                  </a>
-
-                  <button className="primary-btn" onClick={verifyRoblox} disabled={loading}>
-                    {loading?"Verifying...":"Verify"}
-                    <CheckCircle2 size={15}/>
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  className="login-link-button"
-                  onClick={()=>{setChallenge(null);setMessage("");}}
-                >
-                  Use a different account
-                </button>
-              </div>
-          }
-        </>
-      }
-
-      {message&&<div className="login-message">{message}</div>}
-
-      <div className="community-entry-divider"><span>or</span></div>
-
-      <button type="button" className="community-entry-btn" onClick={onCommunity}>
-        <Users size={16}/>
-        <div>
-          <strong>Open the community site</strong>
-          <span>No staff login required.</span>
+        <div className="staff-login-foot">
+          <Coffee size={13}/>
+          <span>Sip. Relax. Enjoy The Bay.</span>
         </div>
-        <ChevronRight size={15}/>
-      </button>
-
-      <div className="login-footer">
-        <Coffee size={14}/>Sip. Relax. Enjoy The Bay.
-      </div>
+      </section>
     </section>
   </main>;
 }
@@ -733,7 +757,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
             title={`Return to ${rememberedUser.username}'s Staff Hub`}
           >
             <img src={rememberedUser.avatar} alt=""/>
-            <span>Are you {rememberedUser.username}?</span>
+            <span>Continue as {rememberedUser.username}</span>
           </button>
         }
 
@@ -1055,6 +1079,10 @@ function Dashboard({token,user,onLogout,onCommunity}){
   const[submissions,setSubmissions]=useState([]);
   const[birthdays,setBirthdays]=useState([]);
   const[toast,setToast]=useState("");
+  const[topSearch,setTopSearch]=useState("");
+  const[topSearchResults,setTopSearchResults]=useState([]);
+  const[topSearchLoading,setTopSearchLoading]=useState(false);
+  const[topSearchOpen,setTopSearchOpen]=useState(false);
 
   const caps=user.capabilities||{};
   const canManageApplications=
@@ -1068,6 +1096,56 @@ function Dashboard({token,user,onLogout,onCommunity}){
     );
 
   const canModerateStaff=Number(user.level||0)>=2;
+
+  useEffect(()=>{
+    const query=topSearch.trim();
+
+    if(query.length<2){
+      setTopSearchResults([]);
+      setTopSearchLoading(false);
+      return;
+    }
+
+    let cancelled=false;
+    const timer=setTimeout(async()=>{
+      setTopSearchLoading(true);
+
+      try{
+        const result=await api(
+          `/api/search?q=${encodeURIComponent(query)}`,
+          {},
+          token
+        );
+
+        if(!cancelled){
+          setTopSearchResults(result.results||[]);
+        }
+      }catch{
+        if(!cancelled)setTopSearchResults([]);
+      }finally{
+        if(!cancelled)setTopSearchLoading(false);
+      }
+    },180);
+
+    return()=>{
+      cancelled=true;
+      clearTimeout(timer);
+    };
+  },[topSearch,token]);
+
+  const openTopSearchResult=result=>{
+    const target=
+      result.type==="staff"?"profiles":
+      result.type==="application"?(hasLeadershipAccess?"reviews":"careers"):
+      result.type==="ticket"?"tickets":
+      result.type==="schedule"?"schedule":
+      "overview";
+
+    setTopSearch("");
+    setTopSearchResults([]);
+    setTopSearchOpen(false);
+    open(target);
+  };
 
   const nav=[
     {id:"overview",label:"Overview",icon:Waves,section:"MAIN",show:true},
@@ -1085,11 +1163,7 @@ function Dashboard({token,user,onLogout,onCommunity}){
     {id:"applications",label:"Applications",icon:FilePenLine,section:"STAFF",show:hasLeadershipAccess},
 
     {id:"information",label:"Resources",icon:BookOpen,section:"TOOLS",show:true},
-    {id:"directory",label:"Staff Directory",icon:Users,section:"TOOLS",show:true},
-    {id:"departments",label:"Departments",icon:Building2,section:"TOOLS",show:true},
     {id:"connections",label:"Connections",icon:Network,section:"TOOLS",show:true},
-    {id:"search",label:"Search",icon:Search,section:"TOOLS",show:true},
-    {id:"notifications",label:"Notifications",icon:Bell,section:"TOOLS",show:true},
     {id:"audit",label:"Audit Log",icon:History,section:"TOOLS",show:hasLeadershipAccess},
     {id:"profiles",label:"Profiles",icon:UserRoundSearch,section:"TOOLS",show:caps.profiles},
     {id:"tickets",label:"Support",icon:LifeBuoy,section:"TOOLS",show:caps.tickets}
@@ -1289,11 +1363,7 @@ function Dashboard({token,user,onLogout,onCommunity}){
     page==="loa"?"Leave of Absence":
     page==="reviews"?"Application Reviews":
     page==="discipline"?"Staff Records":
-    page==="directory"?"Staff Directory":
-    page==="departments"?"Departments":
     page==="connections"?"Connections":
-    page==="search"?"Search":
-    page==="notifications"?"Notifications":
     page==="audit"?"Audit Log":
     page==="information"?"Resources":
     page==="profiles"?"Profile Lookup":
@@ -1350,7 +1420,7 @@ function Dashboard({token,user,onLogout,onCommunity}){
       </div>
 
       <button className="logout-btn" onClick={onLogout}>
-        <LogOut size={15}/>Sign out
+        <LogOut size={15}/>Leave Staff Hub
       </button>
     </aside>
 
@@ -1365,6 +1435,47 @@ function Dashboard({token,user,onLogout,onCommunity}){
         <div className="topbar-copy">
           <span>BAY CAFÉ</span>
           <strong>{pageTitle}</strong>
+        </div>
+
+        <div
+          className="topbar-search"
+          onFocus={()=>setTopSearchOpen(true)}
+          onBlur={()=>setTimeout(()=>setTopSearchOpen(false),140)}
+        >
+          <Search size={15}/>
+          <input
+            value={topSearch}
+            onChange={event=>{
+              setTopSearch(event.target.value);
+              setTopSearchOpen(true);
+            }}
+            placeholder="Search staff, tickets, applications..."
+            aria-label="Search Staff Hub"
+          />
+          {topSearchLoading&&<span className="topbar-search-loading">Searching…</span>}
+
+          {topSearchOpen&&topSearch.trim().length>=2&&
+            <div className="topbar-search-results">
+              {topSearchResults.length
+                ? topSearchResults.slice(0,8).map((result,index)=>
+                    <button
+                      type="button"
+                      key={`${result.type}-${result.id}-${index}`}
+                      onMouseDown={event=>event.preventDefault()}
+                      onClick={()=>openTopSearchResult(result)}
+                    >
+                      <div>
+                        <strong>{result.title}</strong>
+                        <span>{result.subtitle}</span>
+                      </div>
+                      <small>{result.type}</small>
+                    </button>
+                  )
+                : !topSearchLoading&&
+                  <div className="topbar-search-empty">No matches found.</div>
+              }
+            </div>
+          }
         </div>
 
         <div className="topbar-status">
@@ -1418,11 +1529,7 @@ function Dashboard({token,user,onLogout,onCommunity}){
         {page==="loa"&&<LoaPage token={token} user={user} setToast={setToast}/>} 
         {page==="reviews"&&hasLeadershipAccess&&<ApplicationReviewsPage token={token} setToast={setToast}/>} 
         {page==="discipline"&&canModerateStaff&&<DisciplinePage token={token} user={user} setToast={setToast}/>} 
-        {page==="directory"&&<StaffDirectoryPage token={token} user={user}/>} 
-        {page==="departments"&&<DepartmentsPage token={token} user={user} setToast={setToast}/>} 
         {page==="connections"&&<ConnectionsPage token={token} user={user} setToast={setToast}/>} 
-        {page==="search"&&<GlobalSearchPage token={token}/>} 
-        {page==="notifications"&&<NotificationsPage token={token}/>} 
         {page==="audit"&&hasLeadershipAccess&&<AuditLogPage token={token}/>} 
         {page==="information"&&<InformationHub user={user}/>} 
         {page==="profiles"&&<Profiles token={token}/>}
@@ -3192,9 +3299,10 @@ function TicketsPage({token,user,items,reload,setToast}){const[form,setForm]=use
 
 export default function App(){
   const session=useSession();
-  const[communityOpen,setCommunityOpen]=useState(false);
+  const[communityOpen,setCommunityOpen]=useState(true);
   const[showIntro,setShowIntro]=useState(true);
   const[staffTransition,setStaffTransition]=useState(false);
+  const[staffLoginEntrance,setStaffLoginEntrance]=useState(false);
   const[transitionUser,setTransitionUser]=useState(null);
 
   useEffect(()=>{
@@ -3202,18 +3310,49 @@ export default function App(){
     return()=>clearTimeout(timer);
   },[]);
 
-  const handleStaffLogin=(token,user)=>{
-    setTransitionUser(user);
+  const openStaffLogin=()=>{
+    setStaffLoginEntrance(true);
+
+    setTimeout(()=>{
+      setStaffLoginEntrance(false);
+      setCommunityOpen(false);
+    },950);
+  };
+
+  const returnToRememberedStaff=()=>{
+    setTransitionUser(session.user);
     setStaffTransition(true);
-    session.login(token,user);
+    setCommunityOpen(false);
 
     setTimeout(()=>{
       setStaffTransition(false);
-    },2100);
+    },1250);
+  };
+
+  const handleStaffLogin=(token,user)=>{
+    setTransitionUser(user);
+    session.login(token,user);
+    setStaffTransition(true);
+
+    setTimeout(()=>{
+      setStaffTransition(false);
+      setCommunityOpen(false);
+    },1250);
+  };
+
+  const leaveStaffHub=()=>{
+    // "Log out" leaves the Staff Hub but intentionally keeps this device
+    // remembered. The signed session remains stored and can be reopened from
+    // the Community page without signing in again.
+    setCommunityOpen(true);
   };
 
   if(showIntro){
     return <SiteIntro/>;
+  }
+
+  if(staffLoginEntrance){
+    return <StaffLoginEntrance/>;
   }
 
   if(staffTransition){
@@ -3224,8 +3363,8 @@ export default function App(){
     return <main className="session-restore-screen">
       <div className="session-restore-card">
         <ShieldCheck size={24}/>
-        <strong>Signing you back in...</strong>
-        <span>Restoring your Bay Café session.</span>
+        <strong>Checking this device…</strong>
+        <span>Restoring your saved Staff Hub access.</span>
       </div>
     </main>;
   }
@@ -3233,8 +3372,8 @@ export default function App(){
   if(communityOpen){
     return <CommunityDashboard
       rememberedUser={session.user}
-      onRememberedStaff={()=>setCommunityOpen(false)}
-      onStaffLogin={()=>setCommunityOpen(false)}
+      onRememberedStaff={returnToRememberedStaff}
+      onStaffLogin={openStaffLogin}
     />;
   }
 
@@ -3249,7 +3388,7 @@ export default function App(){
   return <Dashboard
     token={session.token}
     user={session.user}
-    onLogout={session.logout}
+    onLogout={leaveStaffHub}
     onCommunity={()=>setCommunityOpen(true)}
   />;
 }
