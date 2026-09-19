@@ -3226,110 +3226,167 @@ function publicBirthday(item){
   return {id:item.id,name:item.name,username:item.username||"",date:item.date,note:item.note||"",createdAt:item.createdAt,createdBy:item.createdBy};
 }
 
+
+let communityTeamCache={
+  value:null,
+  fetchedAt:0,
+  refreshing:null
+};
+
+async function buildCommunityTeamData(){
+  const guild=await trackedGuild();
+
+  if(!guild){
+    throw new Error("Bay Café Discord is unavailable right now.");
+  }
+
+  // Fetch the complete member list only when the cache is stale.
+  // This avoids repeatedly issuing Discord member-search requests.
+  const members=await guild.members.fetch({force:false});
+  const people=[...members.values()].filter(member=>!member.user?.bot);
+
+  const ownershipHierarchy=[
+    "chairwoman",
+    "vice-chairman",
+    "lead coordinator",
+    "coordinator",
+    "administration lead",
+    "chief administration officer",
+    "developing officer"
+  ];
+
+  const leadershipRoleNames=[
+    "leadership council",
+    "leadership team",
+    "chief human resources lead",
+    "chief human resources officer",
+    "chief oversight lead",
+    "chief oversight officer",
+    "chief communications lead",
+    "chief communications officer",
+    "chief operations officer",
+    "chief public relations officer",
+    "chief relations officer",
+    "chief staffing officer"
+  ];
+
+  const roleName=role=>String(role?.name||"").trim().toLowerCase();
+
+  const ownershipPosition=member=>{
+    let best=null;
+    for(const role of member.roles.cache.values()){
+      const index=ownershipHierarchy.indexOf(roleName(role));
+      if(index>=0&&(!best||index<best.index)){
+        best={index,title:role.name};
+      }
+    }
+    return best;
+  };
+
+  const isLeadership=member=>
+    [...member.roles.cache.values()].some(role=>{
+      const name=roleName(role);
+      return leadershipRoleNames.includes(name) ||
+        (name.startsWith("chief ") && !ownershipHierarchy.includes(name));
+    });
+
+  const leadershipTitle=member=>{
+    const role=[...member.roles.cache.values()].find(role=>{
+      const name=roleName(role);
+      return leadershipRoleNames.includes(name) ||
+        (name.startsWith("chief ") && !ownershipHierarchy.includes(name));
+    });
+    return role?.name||"Leadership";
+  };
+
+  const summary=(member,title)=>({
+    id:String(member.id),
+    username:member.user.username,
+    displayName:member.displayName||member.user.globalName||member.user.username,
+    avatar:member.displayAvatarURL({extension:"png",size:256}),
+    title,
+    boostedAt:member.premiumSince?.toISOString()||null
+  });
+
+  const ownership=people
+    .map(member=>({member,position:ownershipPosition(member)}))
+    .filter(item=>item.position)
+    .sort((a,b)=>
+      a.position.index-b.position.index ||
+      a.member.displayName.localeCompare(b.member.displayName)
+    )
+    .map(item=>summary(item.member,item.position.title));
+
+  const ownershipIds=new Set(ownership.map(member=>member.id));
+
+  const leadership=people
+    .filter(member=>!ownershipIds.has(String(member.id))&&isLeadership(member))
+    .map(member=>summary(member,leadershipTitle(member)))
+    .sort((a,b)=>a.displayName.localeCompare(b.displayName));
+
+  const boosters=people
+    .filter(member=>Boolean(member.premiumSince))
+    .sort((a,b)=>new Date(a.premiumSince)-new Date(b.premiumSince))
+    .map(member=>summary(member,"Server Booster"));
+
+  return {
+    success:true,
+    ownership,
+    leadership,
+    boosters,
+    diagnostics:{
+      guildName:guild.name,
+      memberCount:people.length
+    }
+  };
+}
+
+async function communityTeamData(){
+  const age=Date.now()-Number(communityTeamCache.fetchedAt||0);
+
+  // Reuse the same result for 2 minutes.
+  if(communityTeamCache.value&&age<120000){
+    return communityTeamCache.value;
+  }
+
+  // If another request is already refreshing it, share that request.
+  if(communityTeamCache.refreshing){
+    return communityTeamCache.refreshing;
+  }
+
+  communityTeamCache.refreshing=(async()=>{
+    try{
+      const value=await buildCommunityTeamData();
+      communityTeamCache.value=value;
+      communityTeamCache.fetchedAt=Date.now();
+      return value;
+    }finally{
+      communityTeamCache.refreshing=null;
+    }
+  })();
+
+  return communityTeamCache.refreshing;
+}
+
 app.get("/api/community/team",async(_req,res)=>{
   try{
-    const guild=await trackedGuild();
-    if(!guild){
-      return res.status(503).json({success:false,message:"Bay Café Discord is unavailable right now."});
-    }
-
-    const members=await guild.members.fetch();
-    const people=[...members.values()].filter(member=>!member.user?.bot);
-
-    const ownershipHierarchy=[
-      "chairwoman",
-      "vice-chairman",
-      "lead coordinator",
-      "coordinator",
-      "administration lead",
-      "chief administration officer",
-      "developing officer"
-    ];
-
-    const leadershipRoleNames=[
-      "leadership council",
-      "leadership team",
-      "chief human resources lead",
-      "chief human resources officer",
-      "chief oversight lead",
-      "chief oversight officer",
-      "chief communications lead",
-      "chief communications officer",
-      "chief operations officer",
-      "chief public relations officer",
-      "chief relations officer",
-      "chief staffing officer"
-    ];
-
-    const roleName=role=>String(role?.name||"").trim().toLowerCase();
-
-    const ownershipPosition=member=>{
-      let best=null;
-      for(const role of member.roles.cache.values()){
-        const index=ownershipHierarchy.indexOf(roleName(role));
-        if(index>=0&&(!best||index<best.index)){
-          best={index,title:role.name};
-        }
-      }
-      return best;
-    };
-
-    const isLeadership=member=>
-      [...member.roles.cache.values()].some(role=>{
-        const name=roleName(role);
-        return leadershipRoleNames.includes(name) ||
-          (name.startsWith("chief ") && !ownershipHierarchy.includes(name));
-      });
-
-    const leadershipTitle=member=>{
-      const role=[...member.roles.cache.values()].find(role=>{
-        const name=roleName(role);
-        return leadershipRoleNames.includes(name) ||
-          (name.startsWith("chief ") && !ownershipHierarchy.includes(name));
-      });
-      return role?.name||"Leadership";
-    };
-
-    const summary=(member,title)=>({
-      id:String(member.id),
-      username:member.user.username,
-      displayName:member.displayName||member.user.globalName||member.user.username,
-      avatar:member.displayAvatarURL({extension:"png",size:256}),
-      title,
-      boostedAt:member.premiumSince?.toISOString()||null
-    });
-
-    const ownership=people
-      .map(member=>({member,position:ownershipPosition(member)}))
-      .filter(item=>item.position)
-      .sort((a,b)=>a.position.index-b.position.index || a.member.displayName.localeCompare(b.member.displayName))
-      .map(item=>summary(item.member,item.position.title));
-
-    const ownershipIds=new Set(ownership.map(member=>member.id));
-
-    const leadership=people
-      .filter(member=>!ownershipIds.has(String(member.id))&&isLeadership(member))
-      .map(member=>summary(member,leadershipTitle(member)))
-      .sort((a,b)=>a.displayName.localeCompare(b.displayName));
-
-    const boosters=people
-      .filter(member=>Boolean(member.premiumSince))
-      .sort((a,b)=>new Date(a.premiumSince)-new Date(b.premiumSince))
-      .map(member=>summary(member,"Server Booster"));
-
-    res.json({
-      success:true,
-      ownership,
-      leadership,
-      boosters,
-      diagnostics:{
-        guildName:guild.name,
-        memberCount:people.length
-      }
-    });
+    res.json(await communityTeamData());
   }catch(error){
     console.error(`[Bay Café] Community team failed: ${error.stack||error.message}`);
-    res.status(500).json({success:false,message:error.message||"Unable to load the Bay Café team."});
+
+    // If Discord is temporarily rate-limited but we have an older snapshot,
+    // keep the public page working instead of showing an error.
+    if(communityTeamCache.value){
+      return res.json({
+        ...communityTeamCache.value,
+        stale:true
+      });
+    }
+
+    res.status(500).json({
+      success:false,
+      message:error.message||"Unable to load the Bay Café team."
+    });
   }
 });
 

@@ -924,15 +924,21 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
     loadCommunityTickets().catch(()=>{});
     loadCommunityTeam().catch(()=>{});
 
-    const interval=setInterval(()=>{
+    const communityInterval=setInterval(()=>{
       loadAnnouncements().catch(()=>{});
       loadCareers().catch(()=>{});
-            loadBirthdays().catch(()=>{});
+      loadBirthdays().catch(()=>{});
       loadCommunityTickets().catch(()=>{});
-      loadCommunityTeam().catch(()=>{});
     },15000);
 
-    return()=>clearInterval(interval);
+    const teamInterval=setInterval(()=>{
+      loadCommunityTeam().catch(()=>{});
+    },120000);
+
+    return()=>{
+      clearInterval(communityInterval);
+      clearInterval(teamInterval);
+    };
   },[]);
 
   const nav=[
