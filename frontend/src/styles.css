@@ -4877,3 +4877,35 @@ select:focus{
   text-overflow:ellipsis;
   white-space:nowrap;
 }
+
+
+/* V77 — Team visibility + diagnostics */
+.feature-team{
+  min-height:240px;
+  display:flex;
+  align-items:flex-end;
+  background:#0a3541!important;
+}
+
+.community-team-error{
+  padding:14px 16px;
+  border:1px solid rgba(240,142,142,.24);
+  border-radius:9px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  background:#2b1718;
+}
+.community-team-error strong{color:#ffd1d1;font-size:9px}
+.community-team-error span{flex:1;color:#d69d9d;font-size:8px}
+.community-team-error button{
+  padding:7px 10px;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:6px;
+  background:#351d1e;
+  color:#f4dada;
+  font-size:8px;
+}
+@media(max-width:760px){
+  .community-team-error{align-items:flex-start;flex-direction:column}
+}

@@ -700,6 +700,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
   const[communityTicketLoading,setCommunityTicketLoading]=useState(false);
   const[communityTeam,setCommunityTeam]=useState({ownership:[],leadership:[],boosters:[]});
   const[communityTeamLoading,setCommunityTeamLoading]=useState(true);
+  const[communityTeamError,setCommunityTeamError]=useState("");
 
   const loadAnnouncements=async()=>{
     const result=await api("/api/announcements");
@@ -717,6 +718,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
   };
 
   const loadCommunityTeam=async()=>{
+    setCommunityTeamError("");
     try{
       const result=await api("/api/community/team");
       setCommunityTeam({
@@ -724,6 +726,8 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
         leadership:result.leadership||[],
         boosters:result.boosters||[]
       });
+    }catch(error){
+      setCommunityTeamError(error.message||"Unable to load the team from Discord.");
     }finally{
       setCommunityTeamLoading(false);
     }
@@ -1025,6 +1029,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
             <article className="community-feature-card feature-community"><img src={communityArt} alt="Community"/><div className="community-feature-content"><Megaphone size={18}/><span className="card-kicker">Updates</span><h3>See what's happening.</h3><p>Announcements, changes, events, and anything else you should know.</p><button onClick={()=>setPage("announcements")}>View Updates<ChevronRight size={13}/></button></div></article>
             <article className="community-feature-card feature-birthday"><img src={sunsetArt} alt="Sunset"/><div className="community-feature-content"><Cake size={18}/><span className="card-kicker">Birthdays</span><h3>Who's celebrating?</h3><p>Take a look at upcoming birthdays around the community.</p><button onClick={()=>setPage("birthdays")}>View Birthdays<ChevronRight size={13}/></button></div></article>
             <article className="community-feature-card feature-support"><div className="community-feature-content"><LifeBuoy size={18}/><span className="card-kicker">Support</span><h3>Need help?</h3><p>Send a support request directly to the Bay Café Support Team.</p><button onClick={()=>setPage("support")}>Open Support<ChevronRight size={13}/></button></div></article>
+            <article className="community-feature-card feature-team"><div className="community-feature-content"><Users size={18}/><span className="card-kicker">Team</span><h3>Meet Bay Café.</h3><p>See Ownership, Leadership, and our current Discord Server Boosters.</p><button onClick={()=>setPage("team")}>Team & Boosters<ChevronRight size={13}/></button></div></article>
           </section>
 
           <section className="community-color-banner community-update-banner">
@@ -1461,6 +1466,14 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
             title="Our Team."
             text="Ownership is listed by rank, followed by Leadership and current Discord Server Boosters."
           />
+
+          {communityTeamError&&
+            <div className="community-team-error">
+              <strong>Team data couldn't load from Discord.</strong>
+              <span>{communityTeamError}</span>
+              <button type="button" onClick={loadCommunityTeam}>Try Again</button>
+            </div>
+          }
 
           <section className="community-team-section">
             <div className="community-team-heading">

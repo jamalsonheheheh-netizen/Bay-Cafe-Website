@@ -3229,18 +3229,13 @@ function publicBirthday(item){
 app.get("/api/community/team",async(_req,res)=>{
   try{
     const guild=await trackedGuild();
-
     if(!guild){
-      return res.status(503).json({
-        success:false,
-        message:"Bay Café Discord is unavailable right now."
-      });
+      return res.status(503).json({success:false,message:"Bay Café Discord is unavailable right now."});
     }
 
     const members=await guild.members.fetch();
     const people=[...members.values()].filter(member=>!member.user?.bot);
 
-    // Exact Ownership hierarchy, highest -> lowest.
     const ownershipHierarchy=[
       "chairwoman",
       "vice-chairman",
@@ -3253,63 +3248,67 @@ app.get("/api/community/team",async(_req,res)=>{
 
     const leadershipRoleNames=[
       "leadership council",
-      "leadership team"
+      "leadership team",
+      "chief human resources lead",
+      "chief human resources officer",
+      "chief oversight lead",
+      "chief oversight officer",
+      "chief communications lead",
+      "chief communications officer",
+      "chief operations officer",
+      "chief public relations officer",
+      "chief relations officer",
+      "chief staffing officer"
     ];
 
-    const exactRoleName=role=>String(role?.name||"").trim().toLowerCase();
+    const roleName=role=>String(role?.name||"").trim().toLowerCase();
 
     const ownershipPosition=member=>{
-      let best=999;
-      let title="";
-
+      let best=null;
       for(const role of member.roles.cache.values()){
-        const roleName=exactRoleName(role);
-        const index=ownershipHierarchy.indexOf(roleName);
-
-        if(index>=0&&index<best){
-          best=index;
-          title=role.name;
+        const index=ownershipHierarchy.indexOf(roleName(role));
+        if(index>=0&&(!best||index<best.index)){
+          best={index,title:role.name};
         }
       }
-
-      return best===999?null:{index:best,title};
+      return best;
     };
 
-    const leadershipTitle=member=>{
-      const role=[...member.roles.cache.values()].find(role=>
-        leadershipRoleNames.includes(exactRoleName(role))
-      );
+    const isLeadership=member=>
+      [...member.roles.cache.values()].some(role=>{
+        const name=roleName(role);
+        return leadershipRoleNames.includes(name) ||
+          (name.startsWith("chief ") && !ownershipHierarchy.includes(name));
+      });
 
+    const leadershipTitle=member=>{
+      const role=[...member.roles.cache.values()].find(role=>{
+        const name=roleName(role);
+        return leadershipRoleNames.includes(name) ||
+          (name.startsWith("chief ") && !ownershipHierarchy.includes(name));
+      });
       return role?.name||"Leadership";
     };
 
-    const summary=(member,teamTitle)=>({
+    const summary=(member,title)=>({
       id:String(member.id),
       username:member.user.username,
       displayName:member.displayName||member.user.globalName||member.user.username,
       avatar:member.displayAvatarURL({extension:"png",size:256}),
-      title:teamTitle,
+      title,
       boostedAt:member.premiumSince?.toISOString()||null
     });
 
     const ownership=people
       .map(member=>({member,position:ownershipPosition(member)}))
       .filter(item=>item.position)
-      .sort((a,b)=>
-        a.position.index-b.position.index||
-        a.member.displayName.localeCompare(b.member.displayName)
-      )
+      .sort((a,b)=>a.position.index-b.position.index || a.member.displayName.localeCompare(b.member.displayName))
       .map(item=>summary(item.member,item.position.title));
 
     const ownershipIds=new Set(ownership.map(member=>member.id));
 
     const leadership=people
-      .filter(member=>
-        !ownershipIds.has(String(member.id))&&
-        [...member.roles.cache.values()].some(role=>
-          leadershipRoleNames.includes(exactRoleName(role))
-        )
-      )
+      .filter(member=>!ownershipIds.has(String(member.id))&&isLeadership(member))
       .map(member=>summary(member,leadershipTitle(member)))
       .sort((a,b)=>a.displayName.localeCompare(b.displayName));
 
@@ -3322,13 +3321,15 @@ app.get("/api/community/team",async(_req,res)=>{
       success:true,
       ownership,
       leadership,
-      boosters
+      boosters,
+      diagnostics:{
+        guildName:guild.name,
+        memberCount:people.length
+      }
     });
   }catch(error){
-    res.status(500).json({
-      success:false,
-      message:error.message||"Unable to load the Bay Café team."
-    });
+    console.error(`[Bay Café] Community team failed: ${error.stack||error.message}`);
+    res.status(500).json({success:false,message:error.message||"Unable to load the Bay Café team."});
   }
 });
 
