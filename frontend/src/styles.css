@@ -1521,16 +1521,15 @@
 }
 
 .intro-particles span{
-  --x:calc((var(--i) * 71) % 100);
   position:absolute;
-  left:calc(var(--x) * 1%);
+  left:calc(var(--i) * 6.25%);
   bottom:-30px;
-  width:calc(4px + (var(--i) % 4) * 2px);
-  height:calc(4px + (var(--i) % 4) * 2px);
+  width:calc(4px + var(--i) * .12px);
+  height:calc(4px + var(--i) * .12px);
   border-radius:50%;
   border:1px solid rgba(188,245,250,.35);
   background:rgba(139,227,238,.05);
-  animation:bubbleRise calc(4s + (var(--i) % 5) * .65s) linear infinite;
+  animation:bubbleRise calc(4s + var(--i) * .16s) linear infinite;
   animation-delay:calc(var(--i) * -.34s);
 }
 
