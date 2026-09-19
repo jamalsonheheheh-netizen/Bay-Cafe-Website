@@ -698,6 +698,8 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
   const[selectedCommunityTicketId,setSelectedCommunityTicketId]=useState("");
   const[communityReply,setCommunityReply]=useState("");
   const[communityTicketLoading,setCommunityTicketLoading]=useState(false);
+  const[communityTeam,setCommunityTeam]=useState({ownership:[],leadership:[],boosters:[]});
+  const[communityTeamLoading,setCommunityTeamLoading]=useState(true);
 
   const loadAnnouncements=async()=>{
     const result=await api("/api/announcements");
@@ -712,6 +714,19 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
     const result=await api("/api/birthdays");
     setBirthdays(result.birthdays||[]);
     setTodayBirthdays(result.todayBirthdays||[]);
+  };
+
+  const loadCommunityTeam=async()=>{
+    try{
+      const result=await api("/api/community/team");
+      setCommunityTeam({
+        ownership:result.ownership||[],
+        leadership:result.leadership||[],
+        boosters:result.boosters||[]
+      });
+    }finally{
+      setCommunityTeamLoading(false);
+    }
   };
 
   const submitBirthday=async event=>{
@@ -903,12 +918,14 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
     loadCareers().catch(()=>{});
     loadBirthdays().catch(()=>{});
     loadCommunityTickets().catch(()=>{});
+    loadCommunityTeam().catch(()=>{});
 
     const interval=setInterval(()=>{
       loadAnnouncements().catch(()=>{});
       loadCareers().catch(()=>{});
             loadBirthdays().catch(()=>{});
       loadCommunityTickets().catch(()=>{});
+      loadCommunityTeam().catch(()=>{});
     },15000);
 
     return()=>clearInterval(interval);
@@ -920,6 +937,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
     {id:"careers",label:"Careers",icon:BriefcaseBusiness},
     {id:"birthdays",label:"Birthdays",icon:Cake},
     {id:"support",label:"Support",icon:LifeBuoy},
+    {id:"team",label:"Our Team",icon:Users},
     {id:"about",label:"About Bay Café",icon:Coffee}
   ];
 
@@ -1432,6 +1450,101 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
                   text="When you open a Community Support ticket, it will show here on this device."
                 />
             }
+          </section>
+        </div>
+      }
+
+      {page==="team"&&
+        <div className="page-stack">
+          <SectionHead
+            kicker="THE PEOPLE BEHIND BAY CAFÉ"
+            title="Our Team."
+            text="Meet Bay Café Ownership and Leadership, plus the members currently boosting our Discord server."
+          />
+
+          <section className="community-team-section">
+            <div className="community-team-heading">
+              <div>
+                <span className="eyebrow">OWNERSHIP</span>
+                <h2>Ownership Team</h2>
+              </div>
+              <span>{communityTeam.ownership.length}</span>
+            </div>
+
+            <div className="community-member-grid">
+              {communityTeamLoading
+                ? <div className="community-team-empty">Loading Ownership...</div>
+                : communityTeam.ownership.length
+                  ? communityTeam.ownership.map(member=>
+                      <article className="community-member-card" key={member.id}>
+                        <img src={member.avatar} alt=""/>
+                        <div>
+                          <strong>{member.displayName}</strong>
+                          <span>@{member.username}</span>
+                        </div>
+                        <small>OWNERSHIP</small>
+                      </article>
+                    )
+                  : <div className="community-team-empty">No Ownership members found in the Discord server.</div>
+              }
+            </div>
+          </section>
+
+          <section className="community-team-section">
+            <div className="community-team-heading">
+              <div>
+                <span className="eyebrow">LEADERSHIP</span>
+                <h2>Leadership Team</h2>
+              </div>
+              <span>{communityTeam.leadership.length}</span>
+            </div>
+
+            <div className="community-member-grid">
+              {communityTeamLoading
+                ? <div className="community-team-empty">Loading Leadership...</div>
+                : communityTeam.leadership.length
+                  ? communityTeam.leadership.map(member=>
+                      <article className="community-member-card" key={member.id}>
+                        <img src={member.avatar} alt=""/>
+                        <div>
+                          <strong>{member.displayName}</strong>
+                          <span>@{member.username}</span>
+                        </div>
+                        <small>LEADERSHIP</small>
+                      </article>
+                    )
+                  : <div className="community-team-empty">No Leadership members found in the Discord server.</div>
+              }
+            </div>
+          </section>
+
+          <section className="community-booster-section">
+            <div className="community-team-heading">
+              <div>
+                <span className="eyebrow">THANK YOU</span>
+                <h2>Server Boosters</h2>
+                <p>Members currently boosting the Bay Café Discord server.</p>
+              </div>
+              <span>{communityTeam.boosters.length}</span>
+            </div>
+
+            <div className="community-member-grid">
+              {communityTeamLoading
+                ? <div className="community-team-empty">Loading Server Boosters...</div>
+                : communityTeam.boosters.length
+                  ? communityTeam.boosters.map(member=>
+                      <article className="community-member-card booster" key={member.id}>
+                        <img src={member.avatar} alt=""/>
+                        <div>
+                          <strong>{member.displayName}</strong>
+                          <span>@{member.username}</span>
+                        </div>
+                        <small>BOOSTER</small>
+                      </article>
+                    )
+                  : <div className="community-team-empty">No current Server Boosters found.</div>
+              }
+            </div>
           </section>
         </div>
       }

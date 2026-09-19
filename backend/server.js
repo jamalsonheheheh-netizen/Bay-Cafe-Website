@@ -3225,6 +3225,84 @@ function birthdaySortKey(dateText){
 function publicBirthday(item){
   return {id:item.id,name:item.name,username:item.username||"",date:item.date,note:item.note||"",createdAt:item.createdAt,createdBy:item.createdBy};
 }
+
+app.get("/api/community/team",async(_req,res)=>{
+  try{
+    const guild=await trackedGuild();
+
+    if(!guild){
+      return res.status(503).json({
+        success:false,
+        message:"Bay Café Discord is unavailable right now."
+      });
+    }
+
+    const members=await guild.members.fetch();
+    const people=[...members.values()].filter(member=>!member.user?.bot);
+
+    const ownershipRoleNames=[
+      "chairwoman",
+      "vice-chairman",
+      "ownership team",
+      "lead coordinator",
+      "coordinator",
+      "administration lead",
+      "chief administrative officer",
+      "developing officer"
+    ];
+
+    const leadershipRoleNames=[
+      "leadership council",
+      "leadership team"
+    ];
+
+    const hasExactRole=(member,names)=>
+      member.roles.cache.some(role=>
+        names.includes(String(role.name||"").trim().toLowerCase())
+      );
+
+    const summary=member=>({
+      id:String(member.id),
+      username:member.user.username,
+      displayName:member.displayName||member.user.globalName||member.user.username,
+      avatar:member.displayAvatarURL({extension:"png",size:256}),
+      boostedAt:member.premiumSince?.toISOString()||null
+    });
+
+    const ownership=people
+      .filter(member=>hasExactRole(member,ownershipRoleNames))
+      .map(summary)
+      .sort((a,b)=>a.displayName.localeCompare(b.displayName));
+
+    const ownershipIds=new Set(ownership.map(member=>member.id));
+
+    const leadership=people
+      .filter(member=>
+        !ownershipIds.has(String(member.id))&&
+        hasExactRole(member,leadershipRoleNames)
+      )
+      .map(summary)
+      .sort((a,b)=>a.displayName.localeCompare(b.displayName));
+
+    const boosters=people
+      .filter(member=>Boolean(member.premiumSince))
+      .sort((a,b)=>new Date(a.premiumSince)-new Date(b.premiumSince))
+      .map(summary);
+
+    res.json({
+      success:true,
+      ownership,
+      leadership,
+      boosters
+    });
+  }catch(error){
+    res.status(500).json({
+      success:false,
+      message:error.message||"Unable to load the Bay Café team."
+    });
+  }
+});
+
 app.get("/api/birthdays",(_req,res)=>{
   const birthdays=readJson(FILES.birthdays,[])
     .filter(item=>normalizeBirthdayDate(item.date))
