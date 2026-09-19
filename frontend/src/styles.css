@@ -4909,3 +4909,105 @@ select:focus{
 @media(max-width:760px){
   .community-team-error{align-items:flex-start;flex-direction:column}
 }
+
+
+/* V81 — Staff Hub desktop sidebar/content alignment fix
+   Keep the desktop navigation in its own fixed column so it can never sit
+   on top of the Staff Hub page content. */
+@media (min-width: 901px){
+  .app-shell{
+    display:block !important;
+    min-height:100vh;
+    width:100%;
+  }
+
+  .sidebar{
+    position:fixed !important;
+    top:0 !important;
+    left:0 !important;
+    bottom:0 !important;
+    width:252px !important;
+    height:100vh !important;
+    transform:none !important;
+    overflow-y:auto;
+    overflow-x:hidden;
+    z-index:40 !important;
+  }
+
+  .main-panel{
+    display:block !important;
+    width:auto !important;
+    min-width:0 !important;
+    min-height:100vh;
+    margin-left:252px !important;
+    overflow-x:hidden;
+  }
+
+  .topbar{
+    width:100% !important;
+    left:auto !important;
+    right:auto !important;
+    margin-left:0 !important;
+    box-sizing:border-box;
+  }
+
+  .page-wrap{
+    width:100% !important;
+    max-width:1280px !important;
+    margin:0 auto !important;
+    padding-left:28px !important;
+    padding-right:28px !important;
+    box-sizing:border-box;
+  }
+
+  .page-stack,
+  .section-head,
+  .tracker-toolbar,
+  .activity-summary-grid,
+  .tracker-grid{
+    min-width:0;
+    max-width:100%;
+  }
+
+  .mobile-menu,
+  .mobile-close,
+  .sidebar-backdrop{
+    display:none !important;
+  }
+}
+
+/* Mobile/tablet remains a slide-over menu instead of reserving desktop space. */
+@media (max-width: 900px){
+  .app-shell{
+    display:block !important;
+    width:100%;
+  }
+
+  .main-panel{
+    width:100% !important;
+    margin-left:0 !important;
+  }
+
+  .sidebar{
+    position:fixed !important;
+    top:0 !important;
+    left:0 !important;
+    bottom:0 !important;
+    width:min(86vw,280px) !important;
+    height:100vh !important;
+    overflow-y:auto;
+    transform:translateX(-100%) !important;
+    transition:transform .22s ease;
+  }
+
+  .sidebar.open{
+    transform:translateX(0) !important;
+  }
+
+  .page-wrap{
+    width:100% !important;
+    padding-left:18px !important;
+    padding-right:18px !important;
+    box-sizing:border-box;
+  }
+}
