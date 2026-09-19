@@ -4860,3 +4860,20 @@ select:focus{
     justify-self:start;
   }
 }
+
+
+/* V76 — clearer team hierarchy */
+.community-team-rank-note{
+  margin:6px 0 0;
+  max-width:760px;
+  color:#6f9399;
+  font-size:8px;
+  line-height:1.55;
+}
+
+.community-member-card small{
+  max-width:150px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}

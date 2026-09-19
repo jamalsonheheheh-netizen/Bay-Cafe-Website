@@ -937,7 +937,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
     {id:"careers",label:"Careers",icon:BriefcaseBusiness},
     {id:"birthdays",label:"Birthdays",icon:Cake},
     {id:"support",label:"Support",icon:LifeBuoy},
-    {id:"team",label:"Our Team",icon:Users},
+    {id:"team",label:"Team & Boosters",icon:Users},
     {id:"about",label:"About Bay Café",icon:Coffee}
   ];
 
@@ -1459,7 +1459,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
           <SectionHead
             kicker="THE PEOPLE BEHIND BAY CAFÉ"
             title="Our Team."
-            text="Meet Bay Café Ownership and Leadership, plus the members currently boosting our Discord server."
+            text="Ownership is listed by rank, followed by Leadership and current Discord Server Boosters."
           />
 
           <section className="community-team-section">
@@ -1467,6 +1467,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
               <div>
                 <span className="eyebrow">OWNERSHIP</span>
                 <h2>Ownership Team</h2>
+                <p className="community-team-rank-note">Chairwoman → Vice-Chairman → Lead Coordinator → Coordinator → Administration Lead → Chief Administration Officer → Developing Officer</p>
               </div>
               <span>{communityTeam.ownership.length}</span>
             </div>
@@ -1482,7 +1483,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
                           <strong>{member.displayName}</strong>
                           <span>@{member.username}</span>
                         </div>
-                        <small>OWNERSHIP</small>
+                        <small>{member.title||"OWNERSHIP"}</small>
                       </article>
                     )
                   : <div className="community-team-empty">No Ownership members found in the Discord server.</div>
@@ -1510,7 +1511,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
                           <strong>{member.displayName}</strong>
                           <span>@{member.username}</span>
                         </div>
-                        <small>LEADERSHIP</small>
+                        <small>{member.title||"LEADERSHIP"}</small>
                       </article>
                     )
                   : <div className="community-team-empty">No Leadership members found in the Discord server.</div>
@@ -1539,7 +1540,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
                           <strong>{member.displayName}</strong>
                           <span>@{member.username}</span>
                         </div>
-                        <small>BOOSTER</small>
+                        <small>{member.title||"BOOSTER"}</small>
                       </article>
                     )
                   : <div className="community-team-empty">No current Server Boosters found.</div>

@@ -3240,14 +3240,14 @@ app.get("/api/community/team",async(_req,res)=>{
     const members=await guild.members.fetch();
     const people=[...members.values()].filter(member=>!member.user?.bot);
 
-    const ownershipRoleNames=[
+    // Exact Ownership hierarchy, highest -> lowest.
+    const ownershipHierarchy=[
       "chairwoman",
       "vice-chairman",
-      "ownership team",
       "lead coordinator",
       "coordinator",
       "administration lead",
-      "chief administrative officer",
+      "chief administration officer",
       "developing officer"
     ];
 
@@ -3256,38 +3256,67 @@ app.get("/api/community/team",async(_req,res)=>{
       "leadership team"
     ];
 
-    const hasExactRole=(member,names)=>
-      member.roles.cache.some(role=>
-        names.includes(String(role.name||"").trim().toLowerCase())
+    const exactRoleName=role=>String(role?.name||"").trim().toLowerCase();
+
+    const ownershipPosition=member=>{
+      let best=999;
+      let title="";
+
+      for(const role of member.roles.cache.values()){
+        const roleName=exactRoleName(role);
+        const index=ownershipHierarchy.indexOf(roleName);
+
+        if(index>=0&&index<best){
+          best=index;
+          title=role.name;
+        }
+      }
+
+      return best===999?null:{index:best,title};
+    };
+
+    const leadershipTitle=member=>{
+      const role=[...member.roles.cache.values()].find(role=>
+        leadershipRoleNames.includes(exactRoleName(role))
       );
 
-    const summary=member=>({
+      return role?.name||"Leadership";
+    };
+
+    const summary=(member,teamTitle)=>({
       id:String(member.id),
       username:member.user.username,
       displayName:member.displayName||member.user.globalName||member.user.username,
       avatar:member.displayAvatarURL({extension:"png",size:256}),
+      title:teamTitle,
       boostedAt:member.premiumSince?.toISOString()||null
     });
 
     const ownership=people
-      .filter(member=>hasExactRole(member,ownershipRoleNames))
-      .map(summary)
-      .sort((a,b)=>a.displayName.localeCompare(b.displayName));
+      .map(member=>({member,position:ownershipPosition(member)}))
+      .filter(item=>item.position)
+      .sort((a,b)=>
+        a.position.index-b.position.index||
+        a.member.displayName.localeCompare(b.member.displayName)
+      )
+      .map(item=>summary(item.member,item.position.title));
 
     const ownershipIds=new Set(ownership.map(member=>member.id));
 
     const leadership=people
       .filter(member=>
         !ownershipIds.has(String(member.id))&&
-        hasExactRole(member,leadershipRoleNames)
+        [...member.roles.cache.values()].some(role=>
+          leadershipRoleNames.includes(exactRoleName(role))
+        )
       )
-      .map(summary)
+      .map(member=>summary(member,leadershipTitle(member)))
       .sort((a,b)=>a.displayName.localeCompare(b.displayName));
 
     const boosters=people
       .filter(member=>Boolean(member.premiumSince))
       .sort((a,b)=>new Date(a.premiumSince)-new Date(b.premiumSince))
-      .map(summary);
+      .map(member=>summary(member,"Server Booster"));
 
     res.json({
       success:true,
@@ -3302,6 +3331,7 @@ app.get("/api/community/team",async(_req,res)=>{
     });
   }
 });
+
 
 app.get("/api/birthdays",(_req,res)=>{
   const birthdays=readJson(FILES.birthdays,[])
