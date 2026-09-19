@@ -416,7 +416,16 @@ function hierarchyFor(roleName="",rank=0){
 
   let tier="community";
 
-  if(numericRank>=240||ownership.some(value=>name.includes(value))){
+  // Community-only ranks must never receive Staff Hub access,
+  // even if their Roblox numeric rank happens to be high.
+  const communityOnlyRoles=[
+    "server booster",
+    "booster"
+  ];
+
+  if(communityOnlyRoles.includes(name)){
+    tier="community";
+  }else if(numericRank>=240||ownership.some(value=>name.includes(value))){
     tier="ownership";
   }else if(numericRank>=200||leadership.some(value=>name.includes(value))){
     tier="leadership";
