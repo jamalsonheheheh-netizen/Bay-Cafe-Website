@@ -1,0 +1,146 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bay Café</title>
+
+    <style>
+      *{box-sizing:border-box}
+
+      body{
+        margin: 0;
+        overflow: hidden;
+        background: #071d29;
+        font-family: Arial, sans-serif;
+      }
+
+      .scene{
+        height:100vh;
+        position:relative;
+        overflow:hidden;
+        background:url("shore.png") center/cover no-repeat;
+      }
+
+      .water{
+        position:absolute;
+        inset:0;
+        width:100%;
+        height:100%;
+      }
+
+      .title{
+        position: absolute;
+        left: 50%;
+        bottom: 13%;
+        transform: translateX(-50%);
+        font-size: clamp(40px, 7vw, 85px);
+        font-weight: 800;
+        letter-spacing: 9px;
+        color: #966526;
+        text-shadow:
+        1px 1px #e7bc6c,
+        -2px, -2px rgba(74, 45, 15, .35);
+        mix-blend-mode:multiply;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="scene">
+
+      <svg class="water" viewBox="0 0 1000 700" preserveAspectRatio="none">
+
+        <defs>
+
+          <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#1b6877"/>
+            <stop offset="55%" stop-color="#4ea2a7" stop-opacity=".75"/>
+            <stop offset="100%" stop-color="#d8ffff" stop-opacity="0.8"/>
+          </linearGradient>
+
+          <filter id="rough">
+            <feTurbulence
+            type="fractualNoise"
+            baseFrequency="0.1 .03"
+            numOctaves="2">
+            seed="5">
+
+            <animate
+            attributeName="baseFrequency"
+            values=".01 .03;.014 .04;.01 .03"
+            dur="4s"
+            repeatCount="indefinite"/>
+          </feTurbulence>
+
+          <feDisplacementMap
+          in="SourceGraphic"
+          scale="22"/>
+          </filter>
+
+        </defs>
+
+        <path
+        fill="url(#sea)"
+        filter="url(#rough)"
+        opacity=".8">
+      
+      <animate
+      attributeName="d"
+      dur="5s"
+      repeatCount="indefinite"
+
+      values="
+      M0 0 H1000 V250
+      C850 215 700 295 560 255
+      C390 215 230 300 0 265 Z;
+      
+      M0 0 H1000 V390
+      C850 345 700 430 550 385
+      C380 340 210 445 0 395 Z;
+      
+      M0 0 H1000 V285
+      C850 245 700 330 550 285
+      C390 245 220 340 0 300 Z;
+      
+      M0 0 H1000 V250
+      C850 215 700 295 560 255
+      C390 215 230 300 0 265 Z;
+      "/>
+      </path>
+
+      <path
+      fill="none"
+      stroke="white"
+      stroke-width="26"
+      stroke-linecap="round"
+      filter="url(#rough)"
+      opacity=".9">
+    
+    <animate
+    attributeName="d"
+    dur="5s"
+    repeatCount="indefinite"
+
+    values="
+    M0 270
+    C180 315 340 235 500 280
+    C680 335 830 245 1000 275;
+
+    M0 410
+    C180 455 350 365 510 410
+    C690 465 840 370 100 405;
+
+    M0 305
+    C180 350 340 265 500 310
+    C680 365 830 275 1000 305;
+
+    M0 270
+    C180 315 340 235 500 280
+    C680 335 830 245 1000 275;
+    "/>
+    </path>
+      </svg>
+      <div class="title">BAY CAFÉ</div>>
+    </div>
+  </body>
+</html>
