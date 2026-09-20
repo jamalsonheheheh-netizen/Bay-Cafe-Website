@@ -1,109 +1,108 @@
 <!doctype html>
-<html lang="en">
-
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bay Café</title>
 
-  <title>Bay Café</title>
+<style>
+*{box-sizing:border-box}
 
-  <style>
-    * {
-      box-sizing: border-box;
-    }
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#061820;
+}
 
-    body {
-      margin: 0;
-      overflow: hidden;
-      background: #071820;
-      font-family: Arial, Helvetica, sans-serif;
-    }
+.scene{
+  position:relative;
+  width:100%;
+  height:100%;
+}
 
-    .scene {
-      position: relative;
-      width: 100%;
-      height: 100vh;
-      overflow: hidden;
-    }
+#wave{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
 
-    .wave-video {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
+video::-webkit-media-controls{
+  display:none!important;
+}
 
-    .overlay {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(
-        to bottom,
-        rgba(4, 23, 31, 0.08),
-        rgba(4, 23, 31, 0.18)
-      );
-    }
+.title{
+  position:absolute;
+  left:50%;
+  bottom:12%;
+  transform:translate(-50%,20px);
+  opacity:0;
 
-    .title {
-      position: absolute;
-      left: 50%;
-      bottom: 12%;
-      transform: translateX(-50%);
-      white-space: nowrap;
+  color:#8d5d25;
+  font:800 clamp(42px,7vw,90px) Arial;
+  letter-spacing:10px;
+  white-space:nowrap;
 
-      font-size: clamp(42px, 7vw, 90px);
-      font-weight: 800;
-      letter-spacing: 10px;
+  text-shadow:
+    1px 1px #e4ba70,
+    -2px -2px #56361755;
 
-      color: #9b6b2d;
+  mix-blend-mode:multiply;
 
-      text-shadow:
-        1px 1px 0 #e7bd72,
-        -2px -2px 0 rgba(80, 50, 20, 0.3);
+  animation:show 1s ease forwards;
+  animation-delay:3s;
+}
 
-      mix-blend-mode: multiply;
-
-      opacity: 0;
-      animation: reveal 1.2s ease forwards;
-      animation-delay: 2.8s;
-    }
-
-    @keyframes reveal {
-      from {
-        opacity: 0;
-        transform: translate(-50%, 20px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translate(-50%, 0);
-      }
-    }
-  </style>
+@keyframes show{
+  to{
+    opacity:1;
+    transform:translate(-50%,0);
+  }
+}
+</style>
 </head>
 
 <body>
 
-  <div class="scene">
+<div class="scene">
 
-    <video
-      class="wave-video"
-      autoplay
-      muted
-      loop
-      playsinline
-    >
-      <source src="wave.mp4" type="video/mp4">
-    </video>
+  <video
+    id="wave"
+    autoplay
+    muted
+    loop
+    playsinline
+    preload="auto"
+    disablepictureinpicture
+  >
+    <source src="wave.mp4" type="video/mp4">
+  </video>
 
-    <div class="overlay"></div>
+  <div class="title">BAY CAFÉ</div>
 
-    <div class="title">
-      BAY CAFÉ
-    </div>
+</div>
 
-  </div>
+<script>
+const video=document.getElementById("wave");
+
+video.muted=true;
+video.volume=0;
+
+function start(){
+  video.play().catch(()=>{});
+}
+
+video.addEventListener("loadeddata",start);
+video.addEventListener("canplay",start);
+
+start();
+
+document.addEventListener("click",start,{once:true});
+document.addEventListener("touchstart",start,{once:true});
+</script>
 
 </body>
-
 </html>
