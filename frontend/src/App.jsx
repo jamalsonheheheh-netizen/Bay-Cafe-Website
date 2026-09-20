@@ -694,6 +694,8 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
   const[supportForm,setSupportForm]=useState({name:"",robloxUsername:"",discordUsername:"",type:"General Support",subject:"",details:""});
   const[supportSaving,setSupportSaving]=useState(false);
   const[supportMessage,setSupportMessage]=useState("");
+  const[supportVerification,setSupportVerification]=useState(null);
+  const[supportVerifyLoading,setSupportVerifyLoading]=useState(false);
   const[communityTickets,setCommunityTickets]=useState([]);
   const[selectedCommunityTicketId,setSelectedCommunityTicketId]=useState("");
   const[communityReply,setCommunityReply]=useState("");
@@ -816,17 +818,93 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
     }
   };
 
+  const startSupportVerification=async()=>{
+    setSupportVerifyLoading(true);
+    setSupportMessage("");
+
+    try{
+      const result=await api(
+        "/api/community/support/verify/start",
+        {method:"POST",body:JSON.stringify({})}
+      );
+
+      setSupportVerification({
+        challengeId:result.challengeId,
+        code:result.code,
+        command:result.command,
+        expiresAt:result.expiresAt,
+        approved:false,
+        identity:null
+      });
+    }catch(error){
+      setSupportMessage(error.message);
+    }finally{
+      setSupportVerifyLoading(false);
+    }
+  };
+
+  useEffect(()=>{
+    if(!supportVerification?.challengeId||supportVerification.approved)return;
+
+    let cancelled=false;
+
+    const check=async()=>{
+      try{
+        const result=await api(
+          `/api/community/support/verify/status/${encodeURIComponent(supportVerification.challengeId)}`
+        );
+
+        if(!cancelled&&result.approved){
+          setSupportVerification(current=>current?{
+            ...current,
+            approved:true,
+            identity:result.identity
+          }:current);
+
+          setSupportForm(current=>({
+            ...current,
+            discordUsername:result.identity?.username||""
+          }));
+
+          setSupportMessage("Discord verified. You can submit your ticket.");
+        }
+      }catch(error){
+        if(!cancelled&&/expired/i.test(error.message||"")){
+          setSupportVerification(null);
+          setSupportMessage("Verification expired. Start a new Discord verification.");
+        }
+      }
+    };
+
+    check();
+    const interval=setInterval(check,2000);
+
+    return()=>{
+      cancelled=true;
+      clearInterval(interval);
+    };
+  },[supportVerification?.challengeId,supportVerification?.approved]);
+
   const submitCommunitySupport=async event=>{
     event.preventDefault();
     setSupportSaving(true);
     setSupportMessage("");
+
+    if(!supportVerification?.approved){
+      setSupportSaving(false);
+      setSupportMessage("Verify your Discord account before sending a support request.");
+      return;
+    }
 
     try{
       const result=await api(
         "/api/community/support",
         {
           method:"POST",
-          body:JSON.stringify(supportForm)
+          body:JSON.stringify({
+            ...supportForm,
+            verificationChallengeId:supportVerification?.challengeId||""
+          })
         }
       );
 
@@ -854,6 +932,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
         subject:"",
         details:""
       });
+      setSupportVerification(null);
     }catch(error){
       setSupportMessage(error.message);
     }finally{
@@ -1279,8 +1358,36 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
                 or anything else you need the team to look at.
               </p>
               <div className="community-support-contact-note">
-                <strong>Keep your Discord username accurate.</strong>
-                <span>Support may contact you there after reviewing your request.</span>
+                <strong>Discord verification is required.</strong>
+                <span>This records the exact Discord account that opens the ticket.</span>
+              </div>
+
+              <div className="support-verify-box">
+                {supportVerification?.approved
+                  ? <>
+                      <strong>✓ Verified as @{supportVerification.identity?.username}</strong>
+                      <span>Discord ID: {supportVerification.identity?.discordId}</span>
+                    </>
+                  : supportVerification
+                    ? <>
+                        <strong>Verify in the Bay Café Discord</strong>
+                        <span>Send this command in the main server:</span>
+                        <code>{supportVerification.command}</code>
+                        <small>The website will detect it automatically.</small>
+                      </>
+                    : <>
+                        <strong>Verify your Discord account</strong>
+                        <span>You must verify before opening a support ticket.</span>
+                        <button
+                          type="button"
+                          className="secondary-btn"
+                          onClick={startSupportVerification}
+                          disabled={supportVerifyLoading}
+                        >
+                          {supportVerifyLoading?"Starting...":"Start Discord Verification"}
+                        </button>
+                      </>
+                }
               </div>
             </div>
 
@@ -1297,12 +1404,15 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
                 </label>
 
                 <label>
-                  <span>Discord username</span>
+                  <span>Discord account</span>
                   <input
-                    value={supportForm.discordUsername}
-                    onChange={event=>setSupportForm({...supportForm,discordUsername:event.target.value})}
-                    placeholder="example"
-                    required
+                    value={
+                      supportVerification?.approved
+                        ? `@${supportVerification.identity?.username||supportForm.discordUsername}`
+                        : ""
+                    }
+                    placeholder="Verify below"
+                    readOnly
                   />
                 </label>
 
@@ -1352,7 +1462,7 @@ function CommunityDashboard({onStaffLogin,rememberedUser,onRememberedStaff}){
                 />
               </label>
 
-              <button className="primary-btn" disabled={supportSaving}>
+              <button className="primary-btn" disabled={supportSaving||!supportVerification?.approved}>
                 {supportSaving?"Sending...":"Send Support Request"}
                 <LifeBuoy size={14}/>
               </button>

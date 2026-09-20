@@ -5010,3 +5010,33 @@ select:focus{
     box-sizing:border-box;
   }
 }
+
+
+/* V83 — verified Community Support identity */
+.support-verify-box{
+  display:grid;
+  gap:8px;
+  margin-top:16px;
+  padding:16px;
+  border:1px solid rgba(139,227,238,.18);
+  border-radius:14px;
+  background:rgba(7,37,46,.34);
+}
+.support-verify-box strong{color:#eefcfd}
+.support-verify-box span,
+.support-verify-box small{color:rgba(226,247,249,.7)}
+.support-verify-box code{
+  display:block;
+  width:max-content;
+  max-width:100%;
+  padding:8px 10px;
+  border-radius:9px;
+  background:rgba(0,0,0,.24);
+  color:#a9edf3;
+  font:600 .9rem/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;
+  overflow-wrap:anywhere;
+}
+.support-verify-box .secondary-btn{
+  width:max-content;
+  max-width:100%;
+}

@@ -3889,6 +3889,75 @@ app.get("/api/application-submissions",auth,(req,res)=>{
 function publicTicket(ticket){return {...ticket,messages:Array.isArray(ticket.messages)?ticket.messages:[]};}
 
 const communitySupportRate=new Map();
+const communitySupportDiscordRate=new Map();
+const communitySupportVerification=new Map();
+
+function cleanupCommunitySupportVerification(){
+  const now=Date.now();
+  for(const [id,item] of communitySupportVerification.entries()){
+    if(!item||Number(item.expiresAt||0)<=now||item.used===true){
+      communitySupportVerification.delete(id);
+    }
+  }
+}
+
+function supportAuditHash(label,value){
+  if(!value)return "";
+  return sign(`community-support-audit:${label}:${String(value)}`).slice(0,24);
+}
+
+app.post("/api/community/support/verify/start",(req,res)=>{
+  cleanupCommunitySupportVerification();
+
+  const challengeId=crypto.randomUUID();
+  let code="";
+
+  do{
+    code=crypto.randomBytes(3).toString("hex").toUpperCase();
+  }while([...communitySupportVerification.values()].some(item=>item.code===code));
+
+  const item={
+    challengeId,
+    code,
+    createdAt:Date.now(),
+    expiresAt:Date.now()+10*60_000,
+    approved:false,
+    used:false
+  };
+
+  communitySupportVerification.set(challengeId,item);
+
+  res.json({
+    success:true,
+    challengeId,
+    code,
+    command:`,support ${code}`,
+    expiresAt:item.expiresAt
+  });
+});
+
+app.get("/api/community/support/verify/status/:challengeId",(req,res)=>{
+  cleanupCommunitySupportVerification();
+  const item=communitySupportVerification.get(String(req.params.challengeId||""));
+
+  if(!item){
+    return res.status(404).json({
+      success:false,
+      message:"That verification expired. Start a new one."
+    });
+  }
+
+  res.json({
+    success:true,
+    approved:item.approved===true,
+    expiresAt:item.expiresAt,
+    identity:item.approved===true?{
+      discordId:item.discordId,
+      username:item.discordUsername,
+      displayName:item.discordDisplayName
+    }:null
+  });
+});
 
 function communitySupportTokenHash(ticketId,token){
   return sign(`community-support:${ticketId}:${token}`);
@@ -3933,16 +4002,40 @@ app.post("/api/community/support",async(req,res)=>{
       });
     }
 
+    cleanupCommunitySupportVerification();
+
     const name=String(req.body.name||"").trim().slice(0,80);
     const robloxUsername=String(req.body.robloxUsername||"").replace(/^@/,"").trim().slice(0,80);
-    const discordUsername=String(req.body.discordUsername||"").replace(/^@/,"").trim().slice(0,80);
+    const verificationChallengeId=String(req.body.verificationChallengeId||"").trim();
+    const verification=communitySupportVerification.get(verificationChallengeId);
     const type=String(req.body.type||"General Support").trim().slice(0,50);
     const subject=String(req.body.subject||"").trim().slice(0,100);
     const details=String(req.body.details||"").trim().slice(0,1800);
 
     if(name.length<2)return res.status(400).json({success:false,message:"Enter your name."});
-    if(!discordUsername)return res.status(400).json({success:false,message:"Enter your Discord username so Support can contact you."});
+    if(!verification||verification.approved!==true||verification.used===true){
+      return res.status(403).json({
+        success:false,
+        message:"Verify your Discord account in the Bay Café server before opening a ticket."
+      });
+    }
+    if(Number(verification.expiresAt||0)<=Date.now()){
+      communitySupportVerification.delete(verificationChallengeId);
+      return res.status(403).json({success:false,message:"Discord verification expired. Verify again."});
+    }
     if(subject.length<3||details.length<5)return res.status(400).json({success:false,message:"Add a subject and details."});
+
+    const discordId=String(verification.discordId||"");
+    const discordUsername=String(verification.discordUsername||"").slice(0,80);
+    const discordDisplayName=String(verification.discordDisplayName||discordUsername).slice(0,100);
+    const discordLast=Number(communitySupportDiscordRate.get(discordId)||0);
+
+    if(discordLast&&Date.now()-discordLast<5*60_000){
+      return res.status(429).json({
+        success:false,
+        message:"Please wait 5 minutes before opening another support request."
+      });
+    }
 
     const now=new Date().toISOString();
     const ticketId=crypto.randomUUID();
@@ -3955,6 +4048,16 @@ app.post("/api/community/support",async(req,res)=>{
       displayName:name,
       roleName:"Community",
       discordUsername,
+      verifiedDiscordId:discordId,
+      verifiedDiscordUsername:discordUsername,
+      verifiedDiscordDisplayName:discordDisplayName,
+      verifiedDiscordAt:now,
+      verified:true,
+      audit:{
+        ipHash:supportAuditHash("ip",rateKey),
+        userAgentHash:supportAuditHash("ua",req.headers["user-agent"]||""),
+        submittedAt:now
+      },
       type,
       subject,
       status:"open",
@@ -3978,7 +4081,7 @@ app.post("/api/community/support",async(req,res)=>{
     if(channel?.isTextBased()){
       const fields=[
         {name:"Submitted by",value:name,inline:true},
-        {name:"Discord",value:`@${discordUsername}`,inline:true},
+        {name:"Verified Discord",value:`<@${discordId}>\n@${discordUsername}\nID: ${discordId}`,inline:true},
         {name:"Type",value:type,inline:true}
       ];
 
@@ -4023,6 +4126,9 @@ app.post("/api/community/support",async(req,res)=>{
     writeJson(FILES.tickets,items);
     broadcast("ticket:update",publicTicket(ticket));
     communitySupportRate.set(rateKey,Date.now());
+    communitySupportDiscordRate.set(discordId,Date.now());
+    verification.used=true;
+    communitySupportVerification.delete(verificationChallengeId);
 
     res.status(201).json({
       success:true,
@@ -4212,6 +4318,43 @@ async function startDiscord(){if(!DISCORD_BOT_TOKEN){console.warn("[Bay Café] D
         .catch(e=>console.error(`[Bay Café] Scheduled activity sync failed: ${e.message}`));
     },60_000);
   });discordClient.on("messageCreate",async message=>{if(!message.guildId)return;const guild=await trackedGuild();if(guild&&message.guildId!==guild.id)return;
+
+    const supportVerifyMatch=!message.author?.bot
+      ? String(message.content||"").trim().match(/^,support\s+([a-f0-9]{6})$/i)
+      : null;
+
+    if(supportVerifyMatch){
+      cleanupCommunitySupportVerification();
+      const code=supportVerifyMatch[1].toUpperCase();
+      const pending=[...communitySupportVerification.values()]
+        .find(item=>item&&item.code===code&&item.approved!==true&&item.used!==true&&Number(item.expiresAt||0)>Date.now());
+
+      if(!pending){
+        await message.reply({
+          content:"That website support verification code is invalid or expired.",
+          allowedMentions:{repliedUser:false}
+        }).catch(()=>{});
+        return;
+      }
+
+      pending.approved=true;
+      pending.approvedAt=Date.now();
+      pending.discordId=String(message.author.id);
+      pending.discordUsername=String(message.author.username||"");
+      pending.discordDisplayName=String(
+        message.member?.displayName||
+        message.author.globalName||
+        message.author.username||
+        "Discord User"
+      );
+      communitySupportVerification.set(pending.challengeId,pending);
+
+      await message.reply({
+        content:"✅ Discord verified for Bay Café Website Support. Return to the website to submit your ticket.",
+        allowedMentions:{repliedUser:false}
+      }).catch(()=>{});
+      return;
+    }
 
     if(!message.author?.bot&&String(message.content||"").trim().toLowerCase()===",login"){
       cleanupMobileLoginChallenges();
