@@ -1,0 +1,12 @@
+{
+  "name": "bay-cafe",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "vite preview --host 0.0.0.0 --port $PORT"
+  },
+  "dependencies": {
+    "vite": "^6.0.5"
+  }
+}
